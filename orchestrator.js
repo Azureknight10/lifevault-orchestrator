@@ -604,7 +604,7 @@ REQUIRED OUTPUT FORMAT (JSON):
 
         const timeoutMs = process.env.ORCHESTRATOR_RESPONSE_TIMEOUT_MS
             ? parseInt(process.env.ORCHESTRATOR_RESPONSE_TIMEOUT_MS)
-            : 30000;
+            : 45000;
 
         const waitForResponsesPromise = this.waitForResponses(
             context?.conversationId,
@@ -665,9 +665,11 @@ REQUIRED OUTPUT FORMAT (JSON):
                     return;
                 }
 
+                console.log(`[Orchestrator] Incoming response: conversationId=${conversationId}, agentName=${agentName}`);
+
                 const pending = this.pendingResponses.get(conversationId);
                 if (!pending) {
-                    console.log(`[Orchestrator] No pending request for conversationId ${conversationId}.`);
+                    console.log(`[Orchestrator] No pending request for conversationId ${conversationId}. Pending keys: ${Array.from(this.pendingResponses.keys()).join(', ') || 'none'}`);
                     return;
                 }
 
@@ -694,10 +696,13 @@ REQUIRED OUTPUT FORMAT (JSON):
                 return;
             }
 
+            console.log(`[Orchestrator] Waiting for responses (conversationId=${conversationId}) from: ${agentNames.join(', ')}`);
+
             const timeoutId = setTimeout(() => {
                 const pending = this.pendingResponses.get(conversationId);
                 if (pending) {
-                    console.error('[Orchestrator] Response timeout. Returning partial responses.');
+                    const remaining = pending.expectedAgents.filter((name) => !pending.responses[name]);
+                    console.error(`[Orchestrator] Response timeout. Returning partial responses. Pending agents: ${remaining.join(', ') || 'none'}`);
                     const responses = pending.responses || {};
                     pending.expectedAgents.forEach((name) => {
                         if (!responses[name]) {

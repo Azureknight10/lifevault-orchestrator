@@ -1732,6 +1732,7 @@ async function startMemoryAgent() {
             const conversationId = messageReceived.body?.conversationId;
 
             console.log('[Memory Agent] Message received:', query);
+            console.log(`[Memory Agent] conversationId: ${conversationId || 'missing'}`);
 
             if (!query) {
                 console.log('[Memory Agent] No query provided in message body.');
@@ -1756,7 +1757,7 @@ async function startMemoryAgent() {
             });
             await sender.close();
 
-            console.log('[Memory Agent] Response sent to orchestrator.');
+            console.log(`[Memory Agent] Response sent to orchestrator (conversationId=${conversationId || 'missing'}).`);
         },
         processError: async (error) => {
             console.error('[Memory Agent] Error:', error);
