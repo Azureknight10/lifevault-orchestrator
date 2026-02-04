@@ -1,6 +1,7 @@
 // orchestrator.js - Advanced multi-agent orchestration with Perplexity
 const path = require('path');
 const dotenvResult = require('dotenv').config({ path: path.join(__dirname, '.env') });
+const contextManager = require('./contextmanager');
 if (dotenvResult.error) {
     console.error('[Orchestrator] dotenv load error:', dotenvResult.error.message);
 } else {
@@ -300,12 +301,15 @@ buildCapabilityMap() {
     async processQuery(userQuery) {
         const requestId = this.generateRequestId();
         const conversationId = this.generateConversationId();
+        const userId = process.env.ORCHESTRATOR_USER_ID || 'default_user';
+        const sessionId = conversationId;
 
         console.log(`\n${'='.repeat(80)}`);
         console.log(`[PROCESSING] "${userQuery}"`);
         console.log('='.repeat(80) + '\n');
 
         // Step 1: Enhanced routing with priority scoring
+        const sharedContext = await contextManager.getContext(userId, sessionId);
         const routingDecision = await this.intelligentRouting(userQuery);
         console.log(`[REQUEST] ID: ${requestId}`);
         console.log(`[AGENTS] Selected Agents: ${routingDecision.agents.join(', ')}`);
@@ -318,12 +322,20 @@ buildCapabilityMap() {
             {
                 ...routingDecision.context,
                 requestId,
-                conversationId
+                conversationId,
+                userId,
+                sessionId,
+                sharedContext
             }
         );
 
         // Step 3: Cross-agent validation and conflict resolution
         const validatedResponses = await this.validateAndResolveConflicts(agentResponses);
+
+        const contextUpdates = this.extractContextUpdates(validatedResponses);
+        if (Object.keys(contextUpdates).length > 0) {
+            await contextManager.updateContext(userId, sessionId, contextUpdates);
+        }
 
         // Step 4: Multi-layered synthesis with actionable insights
         const finalResponse = await this.enhancedSynthesis(
@@ -343,7 +355,9 @@ buildCapabilityMap() {
                 complexity: routingDecision.complexity,
                 confidence: routingDecision.confidence,
                 requestId,
-                conversationId
+                conversationId,
+                userId,
+                sessionId
             }
         });
 
@@ -356,6 +370,16 @@ buildCapabilityMap() {
 
     generateConversationId() {
         return `conv_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    }
+
+    extractContextUpdates(agentResponses) {
+        const updates = {};
+        Object.values(agentResponses).forEach((response) => {
+            if (response && response.contextUpdates) {
+                Object.assign(updates, response.contextUpdates);
+            }
+        });
+        return updates;
     }
 
     /**
@@ -640,7 +664,10 @@ REQUIRED OUTPUT FORMAT (JSON):
                 timestamp: new Date().toISOString(),
                 conversationId: context?.conversationId || this.generateConversationId(),
                 requestId: context?.requestId,
-                agentType: agentName
+                agentType: agentName,
+                userId: context?.userId,
+                sessionId: context?.sessionId,
+                context: context?.sharedContext || {}
             }
         };
 

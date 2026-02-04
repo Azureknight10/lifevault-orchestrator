@@ -515,8 +515,12 @@ async function startVitalityAgent() {
         processMessage: async (messageReceived) => {
             const query = messageReceived.body?.query;
             const conversationId = messageReceived.body?.conversationId;
+            const userId = messageReceived.body?.userId;
+            const sessionId = messageReceived.body?.sessionId;
+            const sharedContext = messageReceived.body?.context || {};
 
             console.log('[Vitality Agent] Message received:', query);
+            console.log(`[Vitality Agent] sessionId: ${sessionId || 'missing'}`);
 
             if (!query) {
                 console.log('[Vitality Agent] No query provided in message body.');
@@ -525,16 +529,29 @@ async function startVitalityAgent() {
 
             const response = await agent.process(query, {
                 context: {
+                    ...sharedContext,
                     conversationId,
-                    requestId: messageReceived.body?.requestId
+                    requestId: messageReceived.body?.requestId,
+                    userId,
+                    sessionId
                 }
             });
+
+            const contextUpdates = {
+                lastVitalityQuery: query,
+                lastVitalityTimestamp: new Date().toISOString()
+            };
 
             const sender = serviceBusClient.createSender(responseQueueName);
             await sender.sendMessages({
                 body: {
                     agentName: 'vitality',
-                    response,
+                    response: {
+                        agent: 'vitality',
+                        sessionId,
+                        response,
+                        contextUpdates
+                    },
                     conversationId,
                     timestamp: new Date().toISOString()
                 }
