@@ -7,7 +7,12 @@
     "test": "node test-memory.js",
     "start": "node orchestrator.js"
   },
-  "keywords": ["ai", "orchestration", "multi-agent", "lifevault"],
+  "keywords": [
+    "ai",
+    "orchestration",
+    "multi-agent",
+    "lifevault"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs",

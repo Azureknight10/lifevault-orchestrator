@@ -1,6 +1,15 @@
 // agents/wisdomAgent.js - Strategic life guidance, decision frameworks, and accountability coaching
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const axios = require('axios');
+const { ServiceBusClient } = require('@azure/service-bus');
+
+const serviceBusConnectionString = process.env.AZURE_SERVICE_BUS_CONNECTION_STRING;
+const serviceBusClient = serviceBusConnectionString
+    ? new ServiceBusClient(serviceBusConnectionString)
+    : null;
+const agentQueueName = 'wisdom-queue';
+const responseQueueName = process.env.ORCHESTRATOR_RESPONSE_QUEUE || 'orchestrator-response-queue';
 
 class WisdomAgent {
     constructor() {
@@ -273,3 +282,58 @@ ${this.formatBookRecommendations(this.getBookRecommendations(queryAnalysis))}`;
 }
 
 module.exports = WisdomAgent;
+
+async function startWisdomAgent() {
+    if (!serviceBusClient) {
+        console.log('⚠️ Wisdom Agent: Service Bus connection string not set. Listener not started.');
+        return;
+    }
+
+    const agent = new WisdomAgent();
+    const receiver = serviceBusClient.createReceiver(agentQueueName);
+
+    console.log(`[Wisdom Agent] Listening on ${agentQueueName}...`);
+
+    receiver.subscribe({
+        processMessage: async (messageReceived) => {
+            const query = messageReceived.body?.query;
+            const conversationId = messageReceived.body?.conversationId;
+
+            console.log('[Wisdom Agent] Message received:', query);
+
+            if (!query) {
+                console.log('[Wisdom Agent] No query provided in message body.');
+                return;
+            }
+
+            const response = await agent.process(query, {
+                context: {
+                    conversationId,
+                    requestId: messageReceived.body?.requestId
+                }
+            });
+
+            const sender = serviceBusClient.createSender(responseQueueName);
+            await sender.sendMessages({
+                body: {
+                    agentName: 'wisdom',
+                    response,
+                    conversationId,
+                    timestamp: new Date().toISOString()
+                }
+            });
+            await sender.close();
+
+            console.log('[Wisdom Agent] Response sent to orchestrator.');
+        },
+        processError: async (error) => {
+            console.error('[Wisdom Agent] Error:', error);
+        }
+    });
+}
+
+if (require.main === module) {
+    startWisdomAgent();
+}
+
+module.exports.startWisdomAgent = startWisdomAgent;

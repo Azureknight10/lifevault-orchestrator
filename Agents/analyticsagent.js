@@ -1,6 +1,15 @@
 // agents/analyticsAgent.js - Advanced pattern recognition and predictive analytics
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const axios = require('axios');
+const { ServiceBusClient } = require('@azure/service-bus');
+
+const serviceBusConnectionString = process.env.AZURE_SERVICE_BUS_CONNECTION_STRING;
+const serviceBusClient = serviceBusConnectionString
+    ? new ServiceBusClient(serviceBusConnectionString)
+    : null;
+const agentQueueName = 'analytics-queue';
+const responseQueueName = process.env.ORCHESTRATOR_RESPONSE_QUEUE || 'orchestrator-response-queue';
 
 class AnalyticsAgent {
     constructor() {
@@ -634,3 +643,58 @@ buildAnalysisPrompt(userQuery, data, stats, correlations, predictions, context) 
 }
 
 module.exports = AnalyticsAgent;
+
+async function startAnalyticsAgent() {
+    if (!serviceBusClient) {
+        console.log('⚠️ Analytics Agent: Service Bus connection string not set. Listener not started.');
+        return;
+    }
+
+    const agent = new AnalyticsAgent();
+    const receiver = serviceBusClient.createReceiver(agentQueueName);
+
+    console.log(`[Analytics Agent] Listening on ${agentQueueName}...`);
+
+    receiver.subscribe({
+        processMessage: async (messageReceived) => {
+            const query = messageReceived.body?.query;
+            const conversationId = messageReceived.body?.conversationId;
+
+            console.log('[Analytics Agent] Message received:', query);
+
+            if (!query) {
+                console.log('[Analytics Agent] No query provided in message body.');
+                return;
+            }
+
+            const response = await agent.process(query, {
+                context: {
+                    conversationId,
+                    requestId: messageReceived.body?.requestId
+                }
+            });
+
+            const sender = serviceBusClient.createSender(responseQueueName);
+            await sender.sendMessages({
+                body: {
+                    agentName: 'analytics',
+                    response,
+                    conversationId,
+                    timestamp: new Date().toISOString()
+                }
+            });
+            await sender.close();
+
+            console.log('[Analytics Agent] Response sent to orchestrator.');
+        },
+        processError: async (error) => {
+            console.error('[Analytics Agent] Error:', error);
+        }
+    });
+}
+
+if (require.main === module) {
+    startAnalyticsAgent();
+}
+
+module.exports.startAnalyticsAgent = startAnalyticsAgent;

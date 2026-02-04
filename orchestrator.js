@@ -1,28 +1,55 @@
 // orchestrator.js - Advanced multi-agent orchestration with Perplexity
-require('dotenv').config();
+const path = require('path');
+const dotenvResult = require('dotenv').config({ path: path.join(__dirname, '.env') });
+if (dotenvResult.error) {
+    console.error('[Orchestrator] dotenv load error:', dotenvResult.error.message);
+} else {
+    const loadedKeys = Object.keys(dotenvResult.parsed || {});
+    console.log(`[Orchestrator] dotenv keys loaded: ${loadedKeys.join(', ')}`);
+    if (!process.env.AZURE_SERVICE_BUS_CONNECTION_STRING && dotenvResult.parsed?.AZURE_SERVICE_BUS_CONNECTION_STRING) {
+        process.env.AZURE_SERVICE_BUS_CONNECTION_STRING = dotenvResult.parsed.AZURE_SERVICE_BUS_CONNECTION_STRING;
+    }
+}
 const axios = require('axios');
-
-// Import agents
-const VitalityAgent = require('./Agents/Vitalityagent');
-const AnalyticsAgent = require('./Agents/analyticsagent');
-const MemoryAgent = require('./Agents/Memoryagent');
-const WisdomAgent = require('./Agents/wisdomAgent');
+const { ServiceBusClient } = require('@azure/service-bus');
 
 class Orchestrator {
     constructor() {
         this.perplexityApiKey = process.env.PERPLEXITY_API_KEY;
         this.perplexityEndpoint = 'https://api.perplexity.ai/chat/completions';
 
-        // Initialize agents
-        this.agents = {
-            vitality: new VitalityAgent(),
-            analytics: new AnalyticsAgent(),
-            memory: new MemoryAgent(),
-            wisdom: new WisdomAgent()
+        // Service Bus setup
+        const rawServiceBusConnection = process.env.AZURE_SERVICE_BUS_CONNECTION_STRING;
+        const hasServiceBusEnvKey = Object.prototype.hasOwnProperty.call(
+            process.env,
+            'AZURE_SERVICE_BUS_CONNECTION_STRING'
+        );
+        console.log(
+            `[Orchestrator] Service Bus env key present: ${hasServiceBusEnvKey}, length: ${rawServiceBusConnection ? rawServiceBusConnection.length : 0}`
+        );
+        this.serviceBusConnectionString = rawServiceBusConnection && rawServiceBusConnection.trim()
+            ? rawServiceBusConnection.trim()
+            : null;
+        this.serviceBusClient = this.serviceBusConnectionString
+            ? new ServiceBusClient(this.serviceBusConnectionString)
+            : null;
+        this.agentQueues = {
+            wisdom: 'wisdom-queue',
+            vitality: 'vitality-queue',
+            analytics: 'analytics-queue',
+            memory: 'memory-queue'
         };
+        this.responseQueueName = process.env.ORCHESTRATOR_RESPONSE_QUEUE || 'orchestrator-response-queue';
+        this.pendingResponses = new Map();
 
         this.conversationHistory = [];
         this.agentCapabilities = this.buildCapabilityMap();
+
+        if (this.serviceBusClient) {
+            this.listenForResponses();
+        } else {
+            console.log('⚠️ Orchestrator: Service Bus connection string not set. Messaging disabled.');
+        }
     }
 
    /**
@@ -272,6 +299,7 @@ buildCapabilityMap() {
      */
     async processQuery(userQuery) {
         const requestId = this.generateRequestId();
+        const conversationId = this.generateConversationId();
 
         console.log(`\n${'='.repeat(80)}`);
         console.log(`[PROCESSING] "${userQuery}"`);
@@ -289,7 +317,8 @@ buildCapabilityMap() {
             routingDecision.agents,
             {
                 ...routingDecision.context,
-                requestId
+                requestId,
+                conversationId
             }
         );
 
@@ -313,7 +342,8 @@ buildCapabilityMap() {
             metadata: {
                 complexity: routingDecision.complexity,
                 confidence: routingDecision.confidence,
-                requestId
+                requestId,
+                conversationId
             }
         });
 
@@ -322,6 +352,10 @@ buildCapabilityMap() {
 
     generateRequestId() {
         return `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    }
+
+    generateConversationId() {
+        return `conv_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
     }
 
     /**
@@ -564,37 +598,124 @@ REQUIRED OUTPUT FORMAT (JSON):
     async executeAgentsParallel(userQuery, agentNames, context) {
         console.log('[PARALLEL] Executing agents in parallel...\n');
 
-        const agentPromises = agentNames.map(async (agentName) => {
-            try {
-                console.log(`  [START] ${agentName} agent started...`);
-                const agent = this.agents[agentName];
-                const response = await agent.process(userQuery, {
-                    conversationHistory: this.conversationHistory,
-                    context: context,
-                    requestId: context?.requestId
-                });
-                console.log(`  [DONE] ${agentName} agent completed`);
-                return { agentName, response, success: true };
-            } catch (error) {
-                console.error(`  [ERROR] ${agentName} agent failed:`, error.message);
-                return { 
-                    agentName, 
-                    response: { error: true, message: error.message },
-                    success: false 
-                };
+        if (!this.serviceBusClient) {
+            throw new Error('Service Bus client not configured. Cannot send agent messages.');
+        }
+
+        const timeoutMs = process.env.ORCHESTRATOR_RESPONSE_TIMEOUT_MS
+            ? parseInt(process.env.ORCHESTRATOR_RESPONSE_TIMEOUT_MS)
+            : 30000;
+
+        const waitForResponsesPromise = this.waitForResponses(
+            context?.conversationId,
+            agentNames,
+            timeoutMs
+        );
+
+        const sendPromises = agentNames.map(async (agentName) => {
+            console.log(`  [START] ${agentName} agent queued...`);
+            await this.routeQuery(userQuery, agentName, context);
+            return agentName;
+        });
+
+        await Promise.all(sendPromises);
+
+        const responses = await waitForResponsesPromise;
+
+        console.log('\n[SUCCESS] All agents completed\n');
+        return responses;
+    }
+
+    async routeQuery(query, agentName, context) {
+        if (!this.serviceBusClient) return;
+
+        const queueName = this.agentQueues[agentName];
+        if (!queueName) return;
+
+        const sender = this.serviceBusClient.createSender(queueName);
+
+        const message = {
+            body: {
+                query: query,
+                timestamp: new Date().toISOString(),
+                conversationId: context?.conversationId || this.generateConversationId(),
+                requestId: context?.requestId,
+                agentType: agentName
+            }
+        };
+
+        console.log(`[Orchestrator] Sending to ${queueName}:`, query);
+        await sender.sendMessages(message);
+        await sender.close();
+    }
+
+    listenForResponses() {
+        this.responseReceiver = this.serviceBusClient.createReceiver(this.responseQueueName);
+
+        console.log('[Orchestrator] Listening for agent responses...');
+
+        this.responseReceiver.subscribe({
+            processMessage: async (messageReceived) => {
+                const body = messageReceived.body || {};
+                const conversationId = body.conversationId;
+                const agentName = body.agentName;
+
+                if (!conversationId || !agentName) {
+                    console.log('[Orchestrator] Ignoring response without conversationId/agentName.');
+                    return;
+                }
+
+                const pending = this.pendingResponses.get(conversationId);
+                if (!pending) {
+                    console.log(`[Orchestrator] No pending request for conversationId ${conversationId}.`);
+                    return;
+                }
+
+                pending.responses[agentName] = body.response || body;
+                console.log(`[Orchestrator] Response received from ${agentName}.`);
+
+                const allReceived = pending.expectedAgents.every((name) => pending.responses[name]);
+                if (allReceived) {
+                    clearTimeout(pending.timeoutId);
+                    pending.resolve(pending.responses);
+                    this.pendingResponses.delete(conversationId);
+                }
+            },
+            processError: async (error) => {
+                console.error('[Orchestrator] Error:', error);
             }
         });
+    }
 
-        const results = await Promise.all(agentPromises);
-        console.log('\n[SUCCESS] All agents completed\n');
+    waitForResponses(conversationId, agentNames, timeoutMs) {
+        return new Promise((resolve) => {
+            if (!conversationId) {
+                resolve({});
+                return;
+            }
 
-        // Convert to object format
-        const responses = {};
-        results.forEach(r => {
-            responses[r.agentName] = r.response;
+            const timeoutId = setTimeout(() => {
+                const pending = this.pendingResponses.get(conversationId);
+                if (pending) {
+                    console.error('[Orchestrator] Response timeout. Returning partial responses.');
+                    const responses = pending.responses || {};
+                    pending.expectedAgents.forEach((name) => {
+                        if (!responses[name]) {
+                            responses[name] = { error: true, message: 'Response timeout' };
+                        }
+                    });
+                    this.pendingResponses.delete(conversationId);
+                    resolve(responses);
+                }
+            }, timeoutMs);
+
+            this.pendingResponses.set(conversationId, {
+                expectedAgents: agentNames,
+                responses: {},
+                resolve,
+                timeoutId
+            });
         });
-
-        return responses;
     }
 
     /**
