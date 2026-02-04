@@ -3,10 +3,10 @@ require('dotenv').config();
 const axios = require('axios');
 
 // Import agents
-const VitalityAgent = require('./agents/vitalityAgent');
+const VitalityAgent = require('./Agents/Vitalityagent');
 const AnalyticsAgent = require('./Agents/analyticsagent');
-const MemoryAgent = require('./agents/memoryAgent');
-const FatherAgent = require('./Agents/fatherAgent');
+const MemoryAgent = require('./Agents/Memoryagent');
+const WisdomAgent = require('./Agents/wisdomAgent');
 
 class Orchestrator {
     constructor() {
@@ -18,7 +18,7 @@ class Orchestrator {
             vitality: new VitalityAgent(),
             analytics: new AnalyticsAgent(),
             memory: new MemoryAgent(),
-            father: new FatherAgent()
+            wisdom: new WisdomAgent()
         };
 
         this.conversationHistory = [];
@@ -198,117 +198,71 @@ buildCapabilityMap() {
 
 
 
-        father: {
+        wisdom: {
             keywords: {
-                children: ['child', 'children', 'kid', 'kids', 'son', 'daughter', 'evander', 'amelia'],
-                parenting: ['parent', 'parenting', 'father', 'dad', 'fatherhood', 'raise', 'raising'],
-                academic: ['school', 'homework', 'reading', 'math', 'grades', 'teacher', 'learning', 'education', 'tutor', 'study'],
-                behavioral: ['behavior', 'discipline', 'misbehave', 'acting out', 'trouble', 'consequence', 'reward'],
-                developmental: ['development', 'milestone', 'growth', 'progress', 'age appropriate'],
-                social: ['friends', 'social skills', 'play', 'communication', 'interaction', 'sibling'],
-                quality_time: ['quality time', 'spend time', 'bond', 'connection', 'attention', 'present'],
-                specific_child: ['evander', 'amelia', 'my son', 'my daughter']
+                guidance: ['advice', 'guidance', 'mentor', 'coach', 'wisdom', 'counsel', 'perspective'],
+                decision: ['decision', 'decide', 'choice', 'tradeoff', 'prioritize', 'trade-off'],
+                planning: ['plan', 'planning', 'vision', 'strategy', 'roadmap', 'long-term', 'goal'],
+                accountability: ['accountability', 'follow through', 'commit', 'discipline', 'consistency'],
+                parenting: ['parent', 'parenting', 'dad', 'raise', 'raising', 'child', 'children', 'kid', 'kids', 'son', 'daughter', 'evander', 'amelia'],
+                career: ['career', 'job', 'promotion', 'leadership', 'manager', 'work', 'business'],
+                health: ['health', 'fitness', 'sleep', 'nutrition', 'energy', 'wellness'],
+                personal_growth: ['growth', 'identity', 'values', 'purpose', 'habits', 'mindset'],
+                relationships: ['relationship', 'marriage', 'family', 'friends', 'communication']
             },
             capabilities: {
-                academic_support: [
-                    'reading_progress_tracking',
-                    'homework_strategy_optimization',
-                    'learning_style_identification',
-                    'tutoring_session_coordination',
-                    'educational_milestone_monitoring',
-                    'study_technique_prescription',
-                    'teacher_communication_guidance'
+                strategic_guidance: [
+                    'decision_frameworks_and_tradeoff_analysis',
+                    'long_term_vision_and_life_strategy',
+                    'values_alignment_and_priority_setting',
+                    'second_order_effects_analysis',
+                    'risk_reward_scenario_planning'
                 ],
-                behavioral: [
-                    'behavioral_incident_pattern_analysis',
-                    'discipline_strategy_effectiveness_tracking',
-                    'positive_reinforcement_design',
-                    'consequence_framework_development',
-                    'emotional_regulation_teaching',
-                    'trigger_identification',
-                    'behavior_intervention_protocols'
+                synthesis: [
+                    'cross_agent_insight_synthesis',
+                    'contextual_wisdom_application',
+                    'pattern_informed_guidance',
+                    'philosophical_perspective_on_choices'
                 ],
-                developmental: [
-                    'age_appropriate_expectation_setting',
-                    'developmental_milestone_tracking',
-                    'social_emotional_growth_assessment',
-                    'cognitive_development_monitoring',
-                    'physical_development_tracking'
+                planning: [
+                    'goal_architecture_and_milestones',
+                    'annual_quarterly_monthly_planning',
+                    'vision_statement_refinement',
+                    'life_domain_balance_planning'
                 ],
-                relationship: [
-                    'quality_time_tracking_by_child',
-                    'one_on_one_time_optimization',
-                    'father_child_bond_strength_assessment',
-                    'communication_quality_vs_quantity_analysis',
-                    'shared_interest_identification',
-                    'quality_time_activity_suggestions'
+                accountability: [
+                    'commitment_contracts',
+                    'weekly_review_checklists',
+                    'habit_consistency_protocols',
+                    'progress_tracking_and_reflection'
                 ],
-                sibling_dynamics: [
-                    'sibling_conflict_pattern_analysis',
-                    'fairness_perception_monitoring',
-                    'individual_attention_balance',
-                    'sibling_cooperation_strategies',
-                    'rivalry_reduction_techniques'
-                ],
-                educational: [
-                    'sight_word_progress_tracking',
-                    'reading_fluency_monitoring',
-                    'writing_skill_development',
-                    'organizational_skill_building',
-                    'learning_gap_identification',
-                    'home_learning_environment_optimization'
-                ],
-                strategic: [
-                    'long_term_development_goal_setting',
-                    'parenting_style_effectiveness_analysis',
-                    'co_parenting_coordination',
-                    'extracurricular_activity_optimization',
-                    'screen_time_balance_management'
+                domain_guidance: [
+                    'parenting_counsel',
+                    'career_leadership_coaching',
+                    'health_and_energy_alignment',
+                    'personal_growth_coaching',
+                    'relationship_and_communication_wisdom'
                 ]
             },
             priority_triggers: {
-                critical: ['behavioral crisis', 'school trouble', 'child safety', 'developmental concern', 'emotional distress'],
-                high: ['homework help', 'behavior issue', 'reading progress', 'quality time deficit', 'school performance'],
+                critical: ['child safety', 'major life decision', 'crisis', 'emotional distress', 'relationship rupture'],
+                high: ['career crossroads', 'parenting conflict', 'health tradeoff', 'long-term planning'],
                 collaborative: [
-                    'analytics_for_behavioral_patterns',
-                    'memory_for_past_parenting_success'
+                    'analytics_for_patterns',
+                    'memory_for_historical_context',
+                    'vitality_for_energy_and_health_alignment'
                 ]
             },
             data_requirements: [
-                'school_reports',
-                'homework_logs',
-                'behavioral_incident_logs',
-                'quality_time_tracking',
-                'tutoring_notes',
-                'teacher_communications',
-                'reading_assessments',
-                'developmental_milestones'
+                'core_values_and_principles',
+                'life_goals_and_milestones',
+                'decision_logs',
+                'weekly_reviews',
+                'health_and_energy_metrics',
+                'career_performance_notes',
+                'relationship_checkins'
             ],
-            child_profiles: {
-                dylan: {
-                    age: 7,
-                    grade: '2nd',
-                    strengths: ['scooters', 'kinesthetic_learner', 'lego_savvy', 'can follow instructions well'],
-                    growth_areas: ['writing_fluency', 'organization', 'emotional_expression'],
-                    interests: ['scooters', 'video_games', 'working_out', 'sports'],
-                    learning_style: 'hands_on_kinesthetic_and_index_card_based', 
-                    behavioral_notes: 'responds well to physical activity before homework',
-                    relationship_goals: 'more consistent one_on_one time'
-                },
-                Amelia: {
-                    age: 6,
-                    focus_areas: ['reading_development', 'sight_words', 'fluency'],
-                    strengths: ['visual_learner', 'creative' , 'artistic' , 'responds_to_games'],
-                    tutoring: {
-                        frequency: '2x_weekly',
-                        focus: ['sight_words', 'fluency', 'comprehension']
-                    },
-                    learning_style: 'visual_game_based',
-                    behavioral_notes: 'gives up easily when frustrated',
-                    current_goals: '100 sight words by June'
-                }
-            },
-            output_format: 'specific_actionable_parenting_strategies_with_developmental_context'
+            output_format: 'strategic_wisdom_with_actionable_accountability_steps'
         }
     };
 }
@@ -317,20 +271,26 @@ buildCapabilityMap() {
      * Main entry point - enhanced with multi-step reasoning
      */
     async processQuery(userQuery) {
+        const requestId = this.generateRequestId();
+
         console.log(`\n${'='.repeat(80)}`);
         console.log(`[PROCESSING] "${userQuery}"`);
         console.log('='.repeat(80) + '\n');
 
         // Step 1: Enhanced routing with priority scoring
         const routingDecision = await this.intelligentRouting(userQuery);
+        console.log(`[REQUEST] ID: ${requestId}`);
         console.log(`[AGENTS] Selected Agents: ${routingDecision.agents.join(', ')}`);
-        console.log(`[LOGIC] Routing Logic: ${routingDecision.reasoning}\n`);
+        console.log(`[LOGIC] Routing Logic: ${JSON.stringify(routingDecision.reasoning, null, 2)}\n`);
 
         // Step 2: Parallel agent execution with error handling
         const agentResponses = await this.executeAgentsParallel(
             userQuery, 
             routingDecision.agents,
-            routingDecision.context
+            {
+                ...routingDecision.context,
+                requestId
+            }
         );
 
         // Step 3: Cross-agent validation and conflict resolution
@@ -352,11 +312,16 @@ buildCapabilityMap() {
             finalResponse,
             metadata: {
                 complexity: routingDecision.complexity,
-                confidence: routingDecision.confidence
+                confidence: routingDecision.confidence,
+                requestId
             }
         });
 
         return finalResponse;
+    }
+
+    generateRequestId() {
+        return `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     }
 
     /**
@@ -366,9 +331,12 @@ buildCapabilityMap() {
         const systemPrompt = `You are an expert query routing system for a personal AI with 8 specialized agents.
 
 AGENT CAPABILITIES:
-${Object.entries(this.agentCapabilities).map(([name, info]) => 
-    `${name.toUpperCase()}: ${info.capabilities.join(', ')}`
-).join('\n')}
+${Object.entries(this.agentCapabilities).map(([name, info]) => {
+    const capabilities = Array.isArray(info.capabilities)
+        ? info.capabilities
+        : Object.values(info.capabilities || {}).flat();
+    return `${name.toUpperCase()}: ${capabilities.join(', ')}`;
+}).join('\n')}
 
 ═══════════════════════════════════════════════════════════════
 PHASE 1: QUERY ANALYSIS & CLASSIFICATION
@@ -406,13 +374,13 @@ Core Selection Algorithm:
 2. Mandatory Agent Inclusion Rules:
    - "why", "pattern", "trend", "always", "never" → Analytics (force include)
    - "past", "history", "last time", "before", "compared to" → Memory (force include)
-   - "Dylan", "Amelia", "Aubrey", "school", "homework", "parenting" → Father (force include)
+    - "Dylan", "Amelia", "Aubrey", "school", "homework", "parenting" → Wisdom (force include)
    - "burnout", "exhausted", "overwhelmed" + multiple domains → Analytics + Vitality (pair)
 
 3. Agent Collaboration Synergies (boost scores by +15 when paired):
-   - Father + Analytics: Child behavioral patterns, academic progress trends
+    - Wisdom + Analytics: Child behavioral patterns, academic progress trends
    - Vitality + Memory: Holistic well-being tracking
-   - Analytics + Father: Parenting insights and behavioral patterns
+    - Analytics + Wisdom: Parenting insights and behavioral patterns
    - Analytics + Vitality: Physical and activity correlations
    - Memory + Analytics: Historical pattern analysis, progress tracking
    - Memory + Analytics: Temporal pattern recognition and insights
@@ -430,7 +398,7 @@ PHASE 3: CONFLICT PREDICTION & RESOLUTION STRATEGY
 Pre-emptive Conflict Detection:
 1. Identify potential agent conflicts BEFORE execution:
    - Vitality ("train harder") vs Memory ("track patterns") → Interpretation conflict
-   - Analytics ("analyze patterns") vs Father ("prioritize relationships") → Focus conflict
+    - Analytics ("analyze patterns") vs Wisdom ("prioritize relationships") → Focus conflict
    - Memory ("historical data") vs Vitality ("present action") → Temporal focus conflict
 
 2. Conflict Resolution Strategy (include in routing decision):
@@ -441,7 +409,7 @@ Pre-emptive Conflict Detection:
 
 3. Priority Agent Designation:
    When conflicts expected, designate PRIMARY agent whose recommendations take precedence:
-   - Child safety queries: Father is PRIMARY
+    - Child safety queries: Wisdom is PRIMARY
    - Health emergencies: Vitality is PRIMARY
    - Mental health: Guardian is PRIMARY
    - Financial questions: Analytics is PRIMARY
@@ -602,7 +570,8 @@ REQUIRED OUTPUT FORMAT (JSON):
                 const agent = this.agents[agentName];
                 const response = await agent.process(userQuery, {
                     conversationHistory: this.conversationHistory,
-                    context: context
+                    context: context,
+                    requestId: context?.requestId
                 });
                 console.log(`  [DONE] ${agentName} agent completed`);
                 return { agentName, response, success: true };
@@ -781,7 +750,16 @@ REQUIRED OUTPUT FORMAT (JSON):
                     temperature: options.temperature || 0.7,
                     max_tokens: options.max_tokens || 4000,
                     ...(options.response_format === 'json' && {
-                        response_format: { type: 'json_object' }
+                        response_format: {
+                            type: 'json_schema',
+                            json_schema: {
+                                name: 'response',
+                                schema: {
+                                    type: 'object',
+                                    additionalProperties: true
+                                }
+                            }
+                        }
                     })
                 },
                 {

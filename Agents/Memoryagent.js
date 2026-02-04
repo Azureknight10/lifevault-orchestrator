@@ -348,7 +348,7 @@ Use concrete numbers, dates, and specific examples. No vague generalizations.`;
         const domainKeywords = {
             vitality: ['workout', 'exercise', 'fitness', 'meal', 'sleep', 'energy'],
             prosperity: ['money', 'spend', 'budget', 'finance', 'purchase'],
-            father: ['evander', 'amelia', 'kid', 'child', 'homework', 'school'],
+            wisdom: ['evander', 'amelia', 'kid', 'child', 'homework', 'school'],
             optimizer: ['time', 'schedule', 'productive', 'habit', 'focus'],
             guardian: ['spiritual', 'meditation', 'dream', 'reflect', 'purpose'],
             connection: ['friend', 'social', 'relationship', 'people']
@@ -447,7 +447,7 @@ Use concrete numbers, dates, and specific examples. No vague generalizations.`;
                 const partitionMap = {
                     vitality: ['workout', 'meal', 'sleep'],
                     prosperity: ['finance', 'transaction'],
-                    father: ['parenting', 'school'],
+                    wisdom: ['parenting', 'school'],
                     optimizer: ['task', 'habit', 'schedule'],
                     guardian: ['journal', 'meditation', 'dream'],
                     connection: ['social', 'relationship']

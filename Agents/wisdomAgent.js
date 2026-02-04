@@ -1,0 +1,275 @@
+// agents/wisdomAgent.js - Strategic life guidance, decision frameworks, and accountability coaching
+require('dotenv').config();
+const axios = require('axios');
+
+class WisdomAgent {
+    constructor() {
+        this.perplexityApiKey = process.env.PERPLEXITY_API_KEY;
+        this.perplexityEndpoint = 'https://api.perplexity.ai/chat/completions';
+
+        this.systemPrompt = `You are the Wisdom Agent - a strategic life advisor and coaching partner.
+
+═══════════════════════════════════════════════════════════════
+CORE CAPABILITIES:
+═══════════════════════════════════════════════════════════════
+
+1. STRATEGIC LIFE GUIDANCE
+   - Clarify vision, values, and priorities
+   - Provide decision-making frameworks
+   - Identify second-order consequences
+   - Balance short-term wins with long-term outcomes
+
+2. SYNTHESIS ACROSS LIFE DOMAINS
+   - Integrate health, career, parenting, relationships, and personal growth
+   - Translate analytics and memory insights into actionable strategy
+   - Find leverage points and compounding habits
+
+3. PHILOSOPHICAL PERSPECTIVE
+   - Offer timeless principles and perspective on complex choices
+   - Encourage meaning, integrity, and purpose-led decisions
+
+4. LONG-TERM PLANNING
+   - Build 90-day, 1-year, and 3-5 year roadmaps
+   - Define milestones and metrics
+   - Anticipate tradeoffs and constraints
+
+5. ACCOUNTABILITY COACHING (John Maxwell style)
+   - Encourage ownership, clarity, and follow-through
+   - Provide concrete next steps and checkpoints
+   - Ask direct, constructive questions that reinforce commitment
+
+OUTPUT REQUIREMENTS:
+✓ Provide structured guidance with clear frameworks
+✓ Offer 3-5 concrete next actions
+✓ Define success metrics and accountability check-ins
+✓ End with 1-2 coaching questions
+✓ Include 2-3 book recommendations with brief rationale`;
+    }
+
+    async process(userQuery, context = {}) {
+        console.log('🧭 Wisdom Agent processing...');
+
+        try {
+            const queryAnalysis = this.analyzeQuery(userQuery);
+            const insights = this.extractAgentInsights(context);
+
+            const guidance = await this.generateWisdomGuidance(
+                userQuery,
+                queryAnalysis,
+                insights,
+                context
+            );
+
+            return {
+                agent: 'wisdom',
+                timestamp: new Date().toISOString(),
+                query_type: queryAnalysis.type,
+                domains: queryAnalysis.domains,
+                time_horizon: queryAnalysis.time_horizon,
+                insights_used: insights.summary,
+                guidance: guidance,
+                success: true
+            };
+        } catch (error) {
+            console.error('❌ Wisdom Agent error:', error.message);
+            return {
+                agent: 'wisdom',
+                error: true,
+                message: error.message,
+                guidance: this.fallbackWisdomGuidance(userQuery),
+                success: false
+            };
+        }
+    }
+
+    analyzeQuery(query) {
+        const q = query.toLowerCase();
+
+        let type = 'general_guidance';
+        if (q.match(/decide|decision|choice|tradeoff|trade-off|prioritize/)) {
+            type = 'decision_framework';
+        } else if (q.match(/plan|planning|strategy|roadmap|vision|long-term|long term/)) {
+            type = 'long_term_planning';
+        } else if (q.match(/accountability|commit|follow through|discipline|consistency/)) {
+            type = 'accountability_coaching';
+        } else if (q.match(/reflect|meaning|purpose|values|why/)) {
+            type = 'philosophical_perspective';
+        }
+
+        const domains = [];
+        if (q.match(/parent|parenting|dad|kid|child|school|homework|evander|amelia/)) domains.push('parenting');
+        if (q.match(/career|job|promotion|manager|leadership|business|work/)) domains.push('career');
+        if (q.match(/health|fitness|workout|sleep|nutrition|energy/)) domains.push('health');
+        if (q.match(/growth|habit|mindset|identity|discipline|learning/)) domains.push('personal_growth');
+        if (q.match(/relationship|marriage|partner|friend|family|communication/)) domains.push('relationships');
+
+        let time_horizon = 'near_term';
+        if (q.match(/year|annual|long-term|long term|5 year|3 year|vision/)) time_horizon = 'long_term';
+        if (q.match(/quarter|90 day|month|monthly/)) time_horizon = 'mid_term';
+
+        return { type, domains: domains.length ? domains : ['multi_domain'], time_horizon };
+    }
+
+    extractAgentInsights(context) {
+        const insightSources = {
+            memory: [],
+            vitality: [],
+            analytics: []
+        };
+
+        const history = context.conversationHistory || [];
+        const recent = history.slice(-3);
+
+        recent.forEach(entry => {
+            const responses = entry.agentResponses || {};
+            if (responses.memory) insightSources.memory.push(responses.memory);
+            if (responses.vitality) insightSources.vitality.push(responses.vitality);
+            if (responses.analytics) insightSources.analytics.push(responses.analytics);
+        });
+
+        if (context.agentResponses) {
+            if (context.agentResponses.memory) insightSources.memory.push(context.agentResponses.memory);
+            if (context.agentResponses.vitality) insightSources.vitality.push(context.agentResponses.vitality);
+            if (context.agentResponses.analytics) insightSources.analytics.push(context.agentResponses.analytics);
+        }
+
+        const summary = {
+            memory_records: insightSources.memory.length,
+            vitality_records: insightSources.vitality.length,
+            analytics_records: insightSources.analytics.length,
+            has_any: insightSources.memory.length + insightSources.vitality.length + insightSources.analytics.length > 0
+        };
+
+        return { insightSources, summary };
+    }
+
+    async generateWisdomGuidance(userQuery, queryAnalysis, insights, context) {
+        const prompt = `USER QUERY: "${userQuery}"
+
+QUERY ANALYSIS:
+${JSON.stringify(queryAnalysis, null, 2)}
+
+AVAILABLE INSIGHTS (memory/vitality/analytics):
+${JSON.stringify(insights.summary, null, 2)}
+
+RECENT AGENT INSIGHTS (use if available):
+${JSON.stringify(insights.insightSources, null, 2)}
+
+RESPONSE FORMAT:
+## Strategic Guidance
+- 3-5 concise, actionable recommendations
+
+## Decision Framework
+- Apply a clear framework (e.g., 10-10-10, regret minimization, second-order effects, opportunity cost)
+
+## Long-Term Vision & Plan
+- Define 90-day, 1-year, and 3-5 year focus points
+- Include measurable milestones
+
+## Accountability
+- Define 1-3 commitments
+- Define check-in cadence and success metrics
+
+End with 1-2 John Maxwell-style coaching questions that drive ownership.`;
+
+        try {
+            const response = await axios.post(
+                this.perplexityEndpoint,
+                {
+                    model: 'sonar-pro',
+                    messages: [
+                        { role: 'system', content: this.systemPrompt },
+                        { role: 'user', content: prompt }
+                    ],
+                    temperature: 0.5,
+                    max_tokens: 1600
+                },
+                {
+                    headers: {
+                        'Authorization': `Bearer ${this.perplexityApiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    timeout: 30000
+                }
+            );
+
+            const recommendations = this.formatBookRecommendations(
+                this.getBookRecommendations(queryAnalysis)
+            );
+
+            return response.data.choices[0].message.content + recommendations;
+        } catch (error) {
+            console.error('⚠️ Wisdom synthesis error:', error.message);
+            return this.fallbackWisdomGuidance(userQuery, queryAnalysis);
+        }
+    }
+
+    fallbackWisdomGuidance(userQuery, queryAnalysis = {}) {
+        return `## Strategic Guidance
+- Clarify the real objective and the tradeoffs you are willing to accept.
+- Identify the smallest next action that moves the needle within 7 days.
+- Protect energy: align the choice with sleep, health, and family priorities.
+- Create a simple scorecard so you can measure progress weekly.
+
+## Decision Framework
+Use the 10-10-10 lens: How will this choice feel in 10 days, 10 months, and 10 years? Choose the option that preserves long-term integrity and growth.
+
+## Long-Term Vision & Plan
+- **90 days:** Define one measurable outcome and build a weekly rhythm.
+- **1 year:** Set 3 milestones that signal real progress.
+- **3-5 years:** Align with your values and desired identity.
+
+## Accountability
+- **Commitment:** Choose one daily habit and one weekly review.
+- **Check-in cadence:** Weekly 15-minute review.
+- **Success metric:** A single number you can track (time invested, milestones hit).
+
+**Coaching questions:** What are you unwilling to compromise on, and what must change this week to honor that?
+
+${this.formatBookRecommendations(this.getBookRecommendations(queryAnalysis))}`;
+    }
+
+    getBookRecommendations(queryAnalysis = {}) {
+        const domains = queryAnalysis.domains || ['multi_domain'];
+        const type = queryAnalysis.type || 'general_guidance';
+
+        const library = [
+            { tags: ['decision_framework'], title: 'Decisive', author: 'Chip Heath & Dan Heath', reason: 'Practical frameworks to reduce bias and improve decisions.' },
+            { tags: ['decision_framework'], title: 'Thinking in Bets', author: 'Annie Duke', reason: 'Decision-making under uncertainty with real-world tools.' },
+            { tags: ['long_term_planning', 'accountability_coaching'], title: 'The 12 Week Year', author: 'Brian P. Moran & Michael Lennington', reason: 'Turns long-term goals into near-term execution.' },
+            { tags: ['accountability_coaching', 'personal_growth'], title: 'Atomic Habits', author: 'James Clear', reason: 'Builds consistency through systems, not willpower.' },
+            { tags: ['career'], title: 'The 21 Irrefutable Laws of Leadership', author: 'John C. Maxwell', reason: 'Leadership principles aligned with accountability coaching.' },
+            { tags: ['career'], title: 'Deep Work', author: 'Cal Newport', reason: 'Focus and execution in high-stakes career growth.' },
+            { tags: ['parenting'], title: 'The Whole-Brain Child', author: 'Daniel J. Siegel & Tina Payne Bryson', reason: 'Practical tools for guiding child behavior with empathy.' },
+            { tags: ['parenting'], title: 'How to Talk So Kids Will Listen', author: 'Adele Faber & Elaine Mazlish', reason: 'Improves communication and reduces conflict.' },
+            { tags: ['health'], title: 'Why We Sleep', author: 'Matthew Walker', reason: 'Foundational for energy, mood, and decision quality.' },
+            { tags: ['health'], title: 'Outlive', author: 'Peter Attia', reason: 'Long-term health strategy and risk reduction.' },
+            { tags: ['relationships'], title: 'Crucial Conversations', author: 'Kerry Patterson et al.', reason: 'Handle high-stakes conversations with clarity.' },
+            { tags: ['relationships'], title: 'Nonviolent Communication', author: 'Marshall B. Rosenberg', reason: 'De-escalation and connection in relationships.' },
+            { tags: ['personal_growth'], title: 'Essentialism', author: 'Greg McKeown', reason: 'Clarify priorities and eliminate non-essentials.' },
+            { tags: ['personal_growth'], title: 'Man’s Search for Meaning', author: 'Viktor E. Frankl', reason: 'Perspective and purpose during hard seasons.' }
+        ];
+
+        const targetTags = new Set([type, ...domains]);
+        const matches = library.filter(book => book.tags.some(tag => targetTags.has(tag)));
+
+        const fallback = library.filter(book =>
+            ['personal_growth', 'accountability_coaching', 'decision_framework'].some(tag => book.tags.includes(tag))
+        );
+
+        const picks = (matches.length ? matches : fallback).slice(0, 3);
+        return picks;
+    }
+
+    formatBookRecommendations(books) {
+        if (!books || books.length === 0) return '';
+
+        const lines = books.map(book =>
+            `- **${book.title}** — ${book.author}: ${book.reason}`
+        ).join('\n');
+
+        return `\n\n## Book Recommendations\n${lines}`;
+    }
+}
+
+module.exports = WisdomAgent;
