@@ -1,0 +1,22 @@
+{
+  "name": "lifevault-orchestrator",
+  "version": "1.0.0",
+  "description": "Multi-agent orchestration system for LifeVault AI",
+  "main": "orchestrator.js",
+  "scripts": {
+    "test": "node test-memory.js",
+    "start": "node orchestrator.js"
+  },
+  "keywords": ["ai", "orchestration", "multi-agent", "lifevault"],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@azure/data-tables": "^13.3.2",
+    "@azure/service-bus": "^7.9.5",
+    "axios": "^1.13.4",
+    "dotenv": "^17.2.3",
+    "openai": "^6.17.0",
+    "uuid": "^13.0.0"
+  }
+}
