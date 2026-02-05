@@ -1,6 +1,8 @@
 // agents/wisdomAgent.js - Strategic life guidance, decision frameworks, and accountability coaching
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+console.log('[Wisdom DEBUG] bus conn len:', process.env.AZURE_SERVICE_BUS_CONNECTION_STRING?.length || 0);
+
 const axios = require('axios');
 const { ServiceBusClient } = require('@azure/service-bus');
 const { saveMemory, getMemoriesForTopic } = require('../graphstore');

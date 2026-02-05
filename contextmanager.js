@@ -49,7 +49,27 @@ class ContextManager {
 		this.sessionCache.set(cacheKey, context);
 		return context;
 	}
+ // High-level helper: upsert conversation memory entry
+    async upsertMemory(userId, sessionId, memory) {
+        if (!this.tableClient) return;
 
+        try {
+            const rowKey = `memory_${sessionId}_${Date.now()}`;
+
+            const entity = {
+                partitionKey: userId,
+                rowKey,
+                entity_type: 'conversation',
+                sessionId,
+                timestamp: new Date().toISOString(),
+                ...memory // e.g., { query, response, agents_used }
+            };
+
+            await this.tableClient.upsertEntity(entity, 'Merge');
+        } catch (error) {
+            console.error('Error upserting memory:', error.message);
+        }
+    }
 	// Update context with new information
 	async updateContext(userId, sessionId, updates) {
 		const cacheKey = `${userId}_${sessionId}`;

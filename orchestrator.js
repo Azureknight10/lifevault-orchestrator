@@ -1,6 +1,8 @@
 // orchestrator.js - Advanced multi-agent orchestration with Perplexity
 const path = require('path');
 const dotenvResult = require('dotenv').config({ path: path.join(__dirname, '.env') });
+// ADD THIS LINE RIGHT AFTER dotenvResult:
+console.log('[Orch DEBUG] bus conn len:', process.env.AZURE_SERVICE_BUS_CONNECTION_STRING?.length || 0);
 const contextManager = require('./contextmanager');
 if (dotenvResult.error) {
     console.error('[Orchestrator] dotenv load error:', dotenvResult.error.message);
@@ -13,7 +15,7 @@ if (dotenvResult.error) {
 }
 const axios = require('axios');
 const { ServiceBusClient } = require('@azure/service-bus');
-const { upsertMemory } = require('./vectorStore');
+// const { upsertMemory } = require('./vectorStore');
 
 class Orchestrator {
     constructor() {
@@ -358,8 +360,10 @@ buildCapabilityMap() {
         );
 
         try {
-            await upsertMemory({
-                userId,
+            await contextManager.upsertMemory(userId, sessionId, {
+                query: userQuery,
+                response: finalResponse,
+                agents_used: routingDecision.agents,
                 source: 'conversation',
                 timestamp: new Date().toISOString(),
                 text: `${userQuery}\n\n${finalResponse}`
@@ -371,8 +375,10 @@ buildCapabilityMap() {
 
         if (Object.keys(contextUpdates).length > 0) {
             try {
-                await upsertMemory({
-                    userId,
+                await contextManager.upsertMemory(userId, sessionId, {
+                    query: userQuery,
+                    response: contextUpdates,
+                    agents_used: routingDecision.agents,
                     source: 'context_update',
                     timestamp: new Date().toISOString(),
                     text: `Context updates:\n${JSON.stringify(contextUpdates, null, 2)}`

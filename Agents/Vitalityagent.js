@@ -5,6 +5,7 @@ const { ServiceBusClient } = require('@azure/service-bus');
 // agents/VitalityAgent.js - Fitness, nutrition, sleep, and energy optimization
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
+console.log('[Vitality DEBUG] bus conn len:', process.env.AZURE_SERVICE_BUS_CONNECTION_STRING?.length || 0);
 const serviceBusConnectionString = process.env.AZURE_SERVICE_BUS_CONNECTION_STRING;
 const serviceBusClient = serviceBusConnectionString
     ? new ServiceBusClient(serviceBusConnectionString)

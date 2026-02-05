@@ -1,13 +1,16 @@
 // agents/analyticsAgent.js - Advanced pattern recognition and predictive analytics
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const axios = require('axios');
 const { ServiceBusClient } = require('@azure/service-bus');
+
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+console.log('[Analytics DEBUG] bus conn len:', process.env.AZURE_SERVICE_BUS_CONNECTION_STRING?.length || 0);
 
 const serviceBusConnectionString = process.env.AZURE_SERVICE_BUS_CONNECTION_STRING;
 const serviceBusClient = serviceBusConnectionString
     ? new ServiceBusClient(serviceBusConnectionString)
     : null;
+
 const agentQueueName = 'analytics-queue';
 const responseQueueName = process.env.ORCHESTRATOR_RESPONSE_QUEUE || 'orchestrator-response-queue';
 
