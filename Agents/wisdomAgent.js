@@ -298,8 +298,12 @@ async function startWisdomAgent() {
         processMessage: async (messageReceived) => {
             const query = messageReceived.body?.query;
             const conversationId = messageReceived.body?.conversationId;
+            const userId = messageReceived.body?.userId;
+            const sessionId = messageReceived.body?.sessionId;
+            const sharedContext = messageReceived.body?.context || {};
 
             console.log('[Wisdom Agent] Message received:', query);
+            console.log(`[Wisdom Agent] sessionId: ${sessionId || 'missing'}`);
 
             if (!query) {
                 console.log('[Wisdom Agent] No query provided in message body.');
@@ -308,16 +312,29 @@ async function startWisdomAgent() {
 
             const response = await agent.process(query, {
                 context: {
+                    ...sharedContext,
                     conversationId,
-                    requestId: messageReceived.body?.requestId
+                    requestId: messageReceived.body?.requestId,
+                    userId,
+                    sessionId
                 }
             });
+
+            const contextUpdates = {
+                lastWisdomQuery: query,
+                lastWisdomTimestamp: new Date().toISOString()
+            };
 
             const sender = serviceBusClient.createSender(responseQueueName);
             await sender.sendMessages({
                 body: {
                     agentName: 'wisdom',
-                    response,
+                    response: {
+                        agent: 'wisdom',
+                        sessionId,
+                        response,
+                        contextUpdates
+                    },
                     conversationId,
                     timestamp: new Date().toISOString()
                 }

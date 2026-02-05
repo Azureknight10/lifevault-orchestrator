@@ -659,8 +659,12 @@ async function startAnalyticsAgent() {
         processMessage: async (messageReceived) => {
             const query = messageReceived.body?.query;
             const conversationId = messageReceived.body?.conversationId;
+            const userId = messageReceived.body?.userId;
+            const sessionId = messageReceived.body?.sessionId;
+            const sharedContext = messageReceived.body?.context || {};
 
             console.log('[Analytics Agent] Message received:', query);
+            console.log(`[Analytics Agent] sessionId: ${sessionId || 'missing'}`);
 
             if (!query) {
                 console.log('[Analytics Agent] No query provided in message body.');
@@ -669,16 +673,29 @@ async function startAnalyticsAgent() {
 
             const response = await agent.process(query, {
                 context: {
+                    ...sharedContext,
                     conversationId,
-                    requestId: messageReceived.body?.requestId
+                    requestId: messageReceived.body?.requestId,
+                    userId,
+                    sessionId
                 }
             });
+
+            const contextUpdates = {
+                lastAnalyticsQuery: query,
+                lastAnalyticsTimestamp: new Date().toISOString()
+            };
 
             const sender = serviceBusClient.createSender(responseQueueName);
             await sender.sendMessages({
                 body: {
                     agentName: 'analytics',
-                    response,
+                    response: {
+                        agent: 'analytics',
+                        sessionId,
+                        response,
+                        contextUpdates
+                    },
                     conversationId,
                     timestamp: new Date().toISOString()
                 }

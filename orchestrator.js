@@ -13,6 +13,7 @@ if (dotenvResult.error) {
 }
 const axios = require('axios');
 const { ServiceBusClient } = require('@azure/service-bus');
+const { upsertMemory } = require('./vectorStore');
 
 class Orchestrator {
     constructor() {
@@ -309,7 +310,14 @@ buildCapabilityMap() {
         console.log('='.repeat(80) + '\n');
 
         // Step 1: Enhanced routing with priority scoring
-        const sharedContext = await contextManager.getContext(userId, sessionId);
+        console.log(`[Orchestrator] Loading context (userId=${userId}, sessionId=${sessionId})...`);
+        let sharedContext = {};
+        try {
+            sharedContext = await contextManager.getContext(userId, sessionId);
+            console.log('[Orchestrator] Context loaded.');
+        } catch (error) {
+            console.error('[Orchestrator] Context load failed:', error.message);
+        }
         const routingDecision = await this.intelligentRouting(userQuery);
         console.log(`[REQUEST] ID: ${requestId}`);
         console.log(`[AGENTS] Selected Agents: ${routingDecision.agents.join(', ')}`);
@@ -334,7 +342,12 @@ buildCapabilityMap() {
 
         const contextUpdates = this.extractContextUpdates(validatedResponses);
         if (Object.keys(contextUpdates).length > 0) {
-            await contextManager.updateContext(userId, sessionId, contextUpdates);
+            try {
+                await contextManager.updateContext(userId, sessionId, contextUpdates);
+                console.log(`[Orchestrator] Context updated with keys: ${Object.keys(contextUpdates).join(', ')}`);
+            } catch (error) {
+                console.error('[Orchestrator] Context update failed:', error.message);
+            }
         }
 
         // Step 4: Multi-layered synthesis with actionable insights
@@ -343,6 +356,32 @@ buildCapabilityMap() {
             validatedResponses,
             routingDecision.context
         );
+
+        try {
+            await upsertMemory({
+                userId,
+                source: 'conversation',
+                timestamp: new Date().toISOString(),
+                text: `${userQuery}\n\n${finalResponse}`
+            });
+            console.log('[Orchestrator] Conversation memory upserted.');
+        } catch (error) {
+            console.error('[Orchestrator] Conversation memory upsert failed:', error.message);
+        }
+
+        if (Object.keys(contextUpdates).length > 0) {
+            try {
+                await upsertMemory({
+                    userId,
+                    source: 'context_update',
+                    timestamp: new Date().toISOString(),
+                    text: `Context updates:\n${JSON.stringify(contextUpdates, null, 2)}`
+                });
+                console.log('[Orchestrator] Context updates memory upserted.');
+            } catch (error) {
+                console.error('[Orchestrator] Context updates upsert failed:', error.message);
+            }
+        }
 
         // Step 5: Store with metadata for learning
         this.conversationHistory.push({
@@ -637,6 +676,10 @@ REQUIRED OUTPUT FORMAT (JSON):
         );
 
         const sendPromises = agentNames.map(async (agentName) => {
+            if (!this.agentQueues[agentName]) {
+                console.log(`[Orchestrator] Unknown agent "${agentName}" - skipping.`);
+                return agentName;
+            }
             console.log(`  [START] ${agentName} agent queued...`);
             await this.routeQuery(userQuery, agentName, context);
             return agentName;

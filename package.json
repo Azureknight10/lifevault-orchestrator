@@ -18,6 +18,8 @@
   "type": "commonjs",
   "dependencies": {
     "@azure/data-tables": "^13.3.2",
+    "@azure/openai": "^2.0.0",
+    "@azure/search-documents": "^12.2.0",
     "@azure/service-bus": "^7.9.5",
     "axios": "^1.13.4",
     "dotenv": "^17.2.3",

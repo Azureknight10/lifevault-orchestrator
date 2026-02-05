@@ -2,6 +2,7 @@ const path = require('path');
 const axios = require('axios');
 const { TableClient } = require('@azure/data-tables');
 const { ServiceBusClient } = require('@azure/service-bus');
+const { searchMemories } = require('../vectorStore');
 
 // agents/memoryAgent.js - Advanced Memory Agent with Pattern Recognition & Predictive Intelligence
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
@@ -1548,6 +1549,14 @@ Use concrete numbers, dates, and specific examples. No vague generalizations.`;
         context
     ) {
         const learningLibrary = this.getLearningLibrarySnapshot();
+        const semanticHits = (context?.semanticHits || context?.context?.semanticHits || []);
+        const semanticSection = semanticHits.length > 0
+            ? `Semantic Memory Hits (most similar):\n${semanticHits.map(hit => {
+                const score = hit['@search.score'] || hit.score || hit.rerankerScore || 'n/a';
+                const text = (hit.text || '').replace(/\s+/g, ' ').trim().slice(0, 600);
+                return `- score=${score} id=${hit.id || 'unknown'} source=${hit.source || 'unknown'} text="${text}"`;
+            }).join('\n')}`
+            : 'Semantic Memory Hits: none';
         return `User Query: ${userQuery}
 
 Intent: ${intentAnalysis.primary_intent}
@@ -1566,6 +1575,8 @@ ${JSON.stringify(anomalies, null, 2)}
 
 Correlations:
 ${JSON.stringify(correlations, null, 2)}
+
+${semanticSection}
 
 Forecast:
 ${JSON.stringify(forecast, null, 2)}
@@ -1730,6 +1741,22 @@ async function startMemoryAgent() {
         processMessage: async (messageReceived) => {
             const query = messageReceived.body?.query;
             const conversationId = messageReceived.body?.conversationId;
+            const userId = messageReceived.body?.userId;
+            const sessionId = messageReceived.body?.sessionId;
+            const sharedContext = messageReceived.body?.context || {};
+
+            let semanticHits = [];
+            try {
+                semanticHits = await searchMemories({ userId, query, topK: 5 });
+            } catch (error) {
+                console.error('[Memory Agent] Semantic search failed:', error.message);
+            }
+
+            console.log(
+                'MemoryAgent: semantic hits:',
+                semanticHits.map(h => ({ score: h['@search.score'] || h.score, id: h.id }))
+            );
+            sharedContext.semanticHits = semanticHits;
 
             console.log('[Memory Agent] Message received:', query);
             console.log(`[Memory Agent] conversationId: ${conversationId || 'missing'}`);
@@ -1741,16 +1768,29 @@ async function startMemoryAgent() {
 
             const response = await agent.process(query, {
                 context: {
+                    ...sharedContext,
                     conversationId,
-                    requestId: messageReceived.body?.requestId
+                    requestId: messageReceived.body?.requestId,
+                    userId,
+                    sessionId
                 }
             });
+
+            const contextUpdates = {
+                lastMemoryQuery: query,
+                lastMemoryTimestamp: new Date().toISOString()
+            };
 
             const sender = serviceBusClient.createSender(responseQueueName);
             await sender.sendMessages({
                 body: {
                     agentName: 'memory',
-                    response,
+                    response: {
+                        agent: 'memory',
+                        sessionId,
+                        response,
+                        contextUpdates
+                    },
                     conversationId,
                     timestamp: new Date().toISOString()
                 }
