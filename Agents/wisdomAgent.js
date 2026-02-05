@@ -3,6 +3,7 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const axios = require('axios');
 const { ServiceBusClient } = require('@azure/service-bus');
+const { saveMemory, getMemoriesForTopic } = require('../graphstore');
 
 const serviceBusConnectionString = process.env.AZURE_SERVICE_BUS_CONNECTION_STRING;
 const serviceBusClient = serviceBusConnectionString
@@ -68,6 +69,31 @@ OUTPUT REQUIREMENTS:
                 insights,
                 context
             );
+
+            const responseText = guidance;
+            const topics = ['wisdom', 'self_improvement'];
+            const lower = (userQuery || '').toLowerCase();
+
+            if (lower.includes('nutrition') || lower.includes('food') || lower.includes('diet')) {
+                topics.push('nutrition');
+            }
+            if (lower.includes('workout') || lower.includes('exercise') || lower.includes('gym')) {
+                topics.push('workouts');
+            }
+            if (lower.includes('sleep') || lower.includes('rest')) {
+                topics.push('sleep');
+            }
+
+            const memoryId = `wisdom-${Date.now()}`;
+            const resolvedUserId = context.userId || context.context?.userId;
+
+            await saveMemory({
+                userId: resolvedUserId || 'user-001',
+                id: memoryId,
+                text: responseText,
+                topics,
+                sourceAgent: 'wisdom',
+            });
 
             return {
                 agent: 'wisdom',
