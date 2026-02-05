@@ -1,49 +1,26 @@
-const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '.env') });
-
-const { upsertMemory, searchMemories } = require('./vectorStore');
-
-function requireEnv(name) {
-    if (!process.env[name]) {
-        throw new Error(`Missing required environment variable: ${name}`);
-    }
-}
-
-function validateVectorStoreEnv() {
-    requireEnv('AZURE_SEARCH_ENDPOINT');
-    requireEnv('AZURE_SEARCH_API_KEY');
-    requireEnv('AZURE_SEARCH_INDEX_NAME');
-    requireEnv('AZURE_OPENAI_ENDPOINT');
-    requireEnv('AZURE_OPENAI_API_KEY');
-    requireEnv('AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT');
-}
+const { storeMemory, searchMemories } = require('./vectorStore');
 
 async function run() {
-    validateVectorStoreEnv();
-    const userId = 'demo-user';
+  const userId = 'test-user';
 
-    const inserted = await upsertMemory({
-        userId,
-        source: 'agent_insight',
-        timestamp: new Date().toISOString(),
-        text: 'I felt exhausted after a late-night coding session and skipped my workout.'
-    });
+  // 1) Store a test memory
+  const content = 'This is a test memory about workouts';
+  const metadata = { category: 'fitness', note: 'vector test' };
 
-    console.log('Upserted:', inserted.id);
+  const memoryId = await storeMemory(userId, content, metadata);
+  console.log('Stored memory ID:', memoryId);
 
-    const results = await searchMemories({
-        userId,
-        query: 'fatigued after coding at night and missed exercise',
-        topK: 3
-    });
+  // 2) Query with a very similar phrase
+  const query = 'test memory about workouts';
 
-    console.log('Search results:');
-    results.forEach((result, index) => {
-        console.log(`${index + 1}. score=${result.score} source=${result.source} text=${result.text}`);
-    });
+  const results = await searchMemories(userId, query, 5);
+  console.log('Search results:');
+  for (const r of results) {
+    console.log(`Score: ${r.score.toFixed(3)} | Id: ${r.id} | Content: ${r.content}`);
+    console.log('Metadata:', r.metadata);
+  }
 }
 
-run().catch((error) => {
-    console.error('Vector store test failed:', error.message);
-    process.exit(1);
+run().catch(err => {
+  console.error('Test failed:', err);
 });
