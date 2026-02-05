@@ -667,7 +667,7 @@ REQUIRED OUTPUT FORMAT (JSON):
 
         const timeoutMs = process.env.ORCHESTRATOR_RESPONSE_TIMEOUT_MS
             ? parseInt(process.env.ORCHESTRATOR_RESPONSE_TIMEOUT_MS)
-            : 45000;
+            : 90000;
 
         const waitForResponsesPromise = this.waitForResponses(
             context?.conversationId,
@@ -689,7 +689,12 @@ REQUIRED OUTPUT FORMAT (JSON):
 
         const responses = await waitForResponsesPromise;
 
-        console.log('\n[SUCCESS] All agents completed\n');
+        const pendingAgents = agentNames.filter((name) => !responses?.[name]);
+        if (pendingAgents.length === 0) {
+            console.log('\n[SUCCESS] All agents completed\n');
+        } else {
+            console.log(`\n[PARTIAL] Missing agents: ${pendingAgents.join(', ')}\n`);
+        }
         return responses;
     }
 
@@ -978,7 +983,35 @@ REQUIRED OUTPUT FORMAT (JSON):
     }
 }
 
-module.exports = Orchestrator;
+async function runOrchestration(inputText, options = {}) {
+    const orchestrator = new Orchestrator();
+    const {
+        userId = 'shane-dev-001',
+        persona = 'dev',
+        intent = 'plan_day',
+        uiContext = {}
+    } = options;
+
+    // You can extend processQuery to accept these later; for now, pass a single string
+    const combinedQuery = `[persona=${persona}] [intent=${intent}] ${inputText}`;
+
+    const response = await orchestrator.processQuery(combinedQuery, {
+        userId,
+        uiContext
+    });
+
+    // Shape the result for the web console
+    return {
+        finalResponse: typeof response === 'string' ? response : response.finalResponse || '',
+        agentSummaries: response.agentSummaries || [],
+        contextUpdates: response.contextUpdates || {}
+    };
+}
+
+module.exports = {
+    Orchestrator,
+    runOrchestration
+};
 
 // Test runner
 if (require.main === module) {

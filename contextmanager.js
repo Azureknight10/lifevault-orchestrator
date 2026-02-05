@@ -6,7 +6,8 @@ const { TableClient } = require('@azure/data-tables');
 class ContextManager {
 	constructor() {
 		this.connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
-		this.tableName = process.env.AZURE_CONTEXT_TABLE_NAME || 'LifeVaultContext';
+		this.tableName = process.env.AZURE_TABLE_NAME || 'LifeVaultData';
+
 
 		this.tableClient = null;
 		this.sessionCache = new Map();
