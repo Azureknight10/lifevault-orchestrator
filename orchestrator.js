@@ -321,6 +321,12 @@ buildCapabilityMap() {
             console.error('[Orchestrator] Context load failed:', error.message);
         }
         const routingDecision = await this.intelligentRouting(userQuery);
+        
+// TEMP: only allow these three
+routingDecision.agents = routingDecision.agents.filter(name =>
+  ['wisdom', 'vitality', 'analytics'].includes(name)
+);
+
         console.log(`[REQUEST] ID: ${requestId}`);
         console.log(`[AGENTS] Selected Agents: ${routingDecision.agents.join(', ')}`);
         console.log(`[LOGIC] Routing Logic: ${JSON.stringify(routingDecision.reasoning, null, 2)}\n`);
@@ -695,7 +701,10 @@ REQUIRED OUTPUT FORMAT (JSON):
 
         const responses = await waitForResponsesPromise;
 
-        const pendingAgents = agentNames.filter((name) => !responses?.[name]);
+        const pendingAgents = agentNames.filter((name) => {
+            const response = responses?.[name];
+            return !response || response?.error === true && response?.message === 'Response timeout';
+        });
         if (pendingAgents.length === 0) {
             console.log('\n[SUCCESS] All agents completed\n');
         } else {
