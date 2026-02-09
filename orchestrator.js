@@ -701,10 +701,7 @@ REQUIRED OUTPUT FORMAT (JSON):
 
         const responses = await waitForResponsesPromise;
 
-        const pendingAgents = agentNames.filter((name) => {
-            const response = responses?.[name];
-            return !response || response?.error === true && response?.message === 'Response timeout';
-        });
+        const pendingAgents = agentNames.filter((name) => !responses?.[name]);
         if (pendingAgents.length === 0) {
             console.log('\n[SUCCESS] All agents completed\n');
         } else {
@@ -850,100 +847,35 @@ REQUIRED OUTPUT FORMAT (JSON):
      * Enhanced synthesis with 3-layer approach
      */
     async enhancedSynthesis(userQuery, agentResponses, context) {
-        const agentInsights = Object.entries(agentResponses).map(([agent, response]) => 
-            '\n' + agent.toUpperCase() + ':\n' + JSON.stringify(response, null, 2)
-        ).join('\n');
-        
-        const RESPONSE_SYNTHESIS_FRAMEWORK = {
-            structure: {
-                layer1: {
-                    name: 'IMMEDIATE_ACTION',
-                    timeframe: '24_HOURS',
-                    requirements: [
-                        'actionItems: 3-5 concrete, executable tasks',
-                        'specificity: exact timing, methods, success metrics',
-                        'priority: ranked by impact × feasibility score'
-                    ]
-                },
-                layer2: {
-                    name: 'STRATEGIC_INTEGRATION', 
-                    timeframe: '1-4_WEEKS',
-                    requirements: [
-                        'crossDomainStrategy: integrate health, work, social, cognitive domains',
-                        'evidenceBasis: reference user data patterns and behavioral science',
-                        'milestones: measurable checkpoints with target metrics',
-                        'adaptivePathways: if-then branches based on user context'
-                    ]
-                },
-                layer3: {
-                    name: 'SYSTEMS_OPTIMIZATION',
-                    timeframe: 'LONG_TERM',
-                    requirements: [
-                        'architecturalThinking: connect to broader life systems',
-                        'habitFormation: leverage atomic habits + implementation intentions',
-                        'feedbackLoops: define KPIs and tracking mechanisms',
-                        'compoundingEffects: identify synergies across domains'
-                    ]
-                }
-            },
+        const agentResponsesText = Object.entries(agentResponses)
+  .map(([agent, response]) =>
+    '\n' + agent.toUpperCase() + ':\n' + JSON.stringify(response, null, 2)
+  )
+  .join('\n');
 
-            outputRequirements: {
-                dataUtilization: {
-                    contextInjection: 'Extract and reference specific metrics from agent responses',
-                    personalization: 'Use user\'s historical data, preferences, and behavioral patterns',
-                    quantification: 'Include numbers, percentages, timestamps, baseline comparisons'
-                },
-                
-                actionability: {
-                    implementation: 'Provide step-by-step execution details with no ambiguity',
-                    contingencyPlanning: 'Include 2-3 personalized if-then strategies per layer',
-                    resourceSpecification: 'Name exact tools, apps, techniques, or resources',
-                    timeAllocation: 'Specify duration for each action (e.g., "15-min daily review")'
-                },
+const synthesisPrompt = `You are LifeVault's synthesis engine. Create a concise, actionable response (max 400 words) that feels like a natural inner monologue (as if I'm talking to myself). Keep it candid, grounded, and direct—no corporate tone.
 
-                intellectualDepth: {
-                    mechanismExplanation: 'Explain WHY approaches work (behavioral science, data trends)',
-                    patternRecognition: 'Connect insights across multiple life domains',
-                    predictiveGuidance: 'Forecast likely outcomes based on user\'s data trajectory'
-                },
+First, read the user query and the raw agent responses below, then follow this format exactly:
 
-                engagementOptimization: {
-                    tone: 'Supportive coach + strategic advisor hybrid',
-                    structure: 'Use markdown hierarchy: ##, ###, -, numbers, **bold** for emphasis',
-                    followUp: 'End with 1-2 open-ended questions that deepen self-awareness'
-                }
-            },
+## Agent Insights
+- Wisdom: 1–2 sentences, in first-person self-talk (priorities, long-term framing, tradeoffs).
+- Analytics: 1–2 sentences, in first-person self-talk (metrics, timing, capacity, risk).
+- Vitality: 1–2 sentences, in first-person self-talk (energy, recovery, health constraints).
 
-            differentiationStrategy: {
-                vs_generic_ai: {
-                    specificity: '+25% more concrete through user data integration',
-                    interconnectedness: 'Synthesize across agent responses, not isolated insights',
-                    executability: 'Zero abstract advice—every recommendation has clear implementation path',
-                    adaptiveness: 'Context-aware branching logic based on user state'
-                }
-            },
+## Weekend Plan
+Write a synthesized 2-day plan (Saturday and Sunday only), under 300 words total.
+- Use clear time blocks for each day.
+- Integrate insights from all three agents.
+- Avoid weekly/monthly/long-term sections; focus only on this weekend.
+- Use first-person language ("I", "me") and make it sound like a real, self-directed plan.
 
-            qualityAssurance: {
-                preDelivery: [
-                    'Verify all metrics sourced from actual agent data (not generic)',
-                    'Confirm actionability: could user execute without additional questions?',
-                    'Validate cross-domain connections present in Layer 2 & 3',
-                    'Check for ≥3 personalized if-then strategies',
-                    'Ensure markdown structure enhances scanability'
-                ]
-            }
-        };
+User query:
+${userQuery}
 
-        const synthesisPrompt = 'You are synthesizing multi-agent responses into an exceptional, life-changing answer.\n\n' +
-            'USER QUERY: "' + userQuery + '"\n\n' +
-            'AGENT INSIGHTS:\n' +
-            agentInsights +
-            '\n\nREQUIREMENTS:\n' +
-            'Layer 1 (24 hours): ' + RESPONSE_SYNTHESIS_FRAMEWORK.structure.layer1.requirements.join(', ') + '\n' +
-            'Layer 2 (1-4 weeks): ' + RESPONSE_SYNTHESIS_FRAMEWORK.structure.layer2.requirements.join(', ') + '\n' +
-            'Layer 3 (Long-term): ' + RESPONSE_SYNTHESIS_FRAMEWORK.structure.layer3.requirements.join(', ') + '\n\n' +
-            'Quality Assurance Checklist:\n' +
-            RESPONSE_SYNTHESIS_FRAMEWORK.qualityAssurance.preDelivery.map((item, i) => (i + 1) + '. ' + item).join('\n');
+Agent responses:
+${agentResponsesText}
+`;
+
 
         const response = await this.callPerplexity([
             { role: 'system', content: 'You are a world-class life optimization coach synthesizing AI insights.' },
@@ -1000,24 +932,22 @@ REQUIRED OUTPUT FORMAT (JSON):
 
 async function runOrchestration(inputText, options = {}) {
     const orchestrator = new Orchestrator();
-    const {
-        userId = 'shane-dev-001',
-        persona = 'dev',
-        intent = 'plan_day',
-        uiContext = {}
-    } = options;
-
-    // You can extend processQuery to accept these later; for now, pass a single string
+    
+    // Extract values from options (passed from server.js)
+    const userId = options.userId || "shane-dev-001";
+    const persona = options.persona || "dev";
+    const intent = options.intent || "plan_day";
+    const uiContext = options.uiContext || {};
+    
+    // Build combined query with proper formatting
     const combinedQuery = `[persona=${persona}] [intent=${intent}] ${inputText}`;
-
-    const response = await orchestrator.processQuery(combinedQuery, {
-        userId,
-        uiContext
-    });
-
-    // Shape the result for the web console
+    
+    // Call orchestrator
+    const response = await orchestrator.processQuery(combinedQuery, userId, uiContext);
+    
+    // Return formatted response for console.html
     return {
-        finalResponse: typeof response === 'string' ? response : response.finalResponse || '',
+        finalResponse: typeof response === 'string' ? response : response.finalResponse || response,
         agentSummaries: response.agentSummaries || [],
         contextUpdates: response.contextUpdates || {}
     };

@@ -385,52 +385,46 @@ async function startWisdomAgent() {
 
     receiver.subscribe({
         processMessage: async (messageReceived) => {
-            const query = messageReceived.body?.query;
-            const conversationId = messageReceived.body?.conversationId;
-            const userId = messageReceived.body?.userId;
-            const sessionId = messageReceived.body?.sessionId;
-            const sharedContext = messageReceived.body?.context || {};
+            try {
+                const body = messageReceived.body || {};
+                const query = body?.query;
+                const conversationId = body?.conversationId;
+                const userId = body?.userId;
+                const sessionId = body?.sessionId;
+                const sharedContext = body?.context || {};
 
-            console.log('[Wisdom Agent] Message received:', query);
-            console.log(`[Wisdom Agent] sessionId: ${sessionId || 'missing'}`);
+                console.log('[Wisdom Agent] Message received:', body);
+                console.log(`[Wisdom Agent] sessionId: ${sessionId || 'missing'}`);
 
-            if (!query) {
-                console.log('[Wisdom Agent] No query provided in message body.');
-                return;
+                if (!query) {
+                    console.log('[Wisdom Agent] No query provided in message body.');
+                    return;
+                }
+
+                const wisdomResponse = await agent.process(query, {
+                    context: {
+                        ...sharedContext,
+                        conversationId,
+                        requestId: body?.requestId,
+                        userId,
+                        sessionId
+                    }
+                });
+
+                const sender = serviceBusClient.createSender(responseQueueName);
+                await sender.sendMessages({
+                    body: {
+                        conversationId,
+                        agentName: 'wisdom',
+                        response: wisdomResponse
+                    }
+                });
+                await sender.close();
+
+                console.log('[Wisdom Agent] Response sent to orchestrator.');
+            } catch (error) {
+                console.error('[Wisdom Agent] Error:', error);
             }
-
-            const response = await agent.process(query, {
-                context: {
-                    ...sharedContext,
-                    conversationId,
-                    requestId: messageReceived.body?.requestId,
-                    userId,
-                    sessionId
-                }
-            });
-
-            const contextUpdates = {
-                lastWisdomQuery: query,
-                lastWisdomTimestamp: new Date().toISOString()
-            };
-
-            const sender = serviceBusClient.createSender(responseQueueName);
-            await sender.sendMessages({
-                body: {
-                    agentName: 'wisdom',
-                    response: {
-                        agent: 'wisdom',
-                        sessionId,
-                        response,
-                        contextUpdates
-                    },
-                    conversationId,
-                    timestamp: new Date().toISOString()
-                }
-            });
-            await sender.close();
-
-            console.log('[Wisdom Agent] Response sent to orchestrator.');
         },
         processError: async (error) => {
             console.error('[Wisdom Agent] Error:', error);
