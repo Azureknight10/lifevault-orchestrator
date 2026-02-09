@@ -265,3 +265,121 @@ module.exports = {
   getDailySummary,
   estimateCaloriesBurned
 };
+const { getDailyActivity, getSleep, getHeartRateIntraday } = require('./fitbitAPI');
+
+/**
+ * Sync Fitbit data for a given date into Azure Tables
+ */
+async function syncFitbitData(date) {
+  try {
+    // Fetch from Fitbit
+    const [activity, sleep, hr] = await Promise.all([
+      getDailyActivity(date),
+      getSleep(date),
+      getHeartRateIntraday(date)
+    ]);
+
+    // 1) Update DailyActivity with Fitbit data
+    const dailyClient = TableClient.fromConnectionString(connectionString, 'DailyActivity');
+    
+    // Create table if it doesn't exist
+    try {
+      await dailyClient.createTable();
+    } catch (e) {
+      // Table already exists, ignore
+    }
+    
+    const activityEntity = {
+      partitionKey: 'USER_shane-dev-001',
+      rowKey: date,
+      date,
+      steps: activity.summary.steps,
+      caloriesBurned: activity.summary.caloriesOut,
+      activeMinutes: activity.summary.fairlyActiveMinutes + activity.summary.veryActiveMinutes,
+      distance: activity.summary.distances[0]?.distance || 0,
+      source: 'fitbit',
+      lastSync: new Date().toISOString()
+    };
+    await dailyClient.upsertEntity(activityEntity, 'Merge');
+    console.log(`[Fitbit Sync] Updated DailyActivity for ${date}`);
+
+    // 2) Save sleep data to SleepLog table
+    if (sleep.sleep && sleep.sleep.length > 0) {
+      const sleepClient = TableClient.fromConnectionString(connectionString, 'SleepLog');
+      
+      // Create table if it doesn't exist
+      try {
+        await sleepClient.createTable();
+      } catch (e) {
+        // Table already exists, ignore
+      }
+
+      const mainSleep = sleep.sleep[0];
+      const sleepEntity = {
+        partitionKey: 'USER_shane-dev-001',
+        rowKey: date,
+        date,
+        duration: mainSleep.duration,
+        efficiency: mainSleep.efficiency,
+        minutesAsleep: mainSleep.minutesAsleep,
+        minutesAwake: mainSleep.minutesAwake,
+        deepMinutes: mainSleep.levels?.summary?.deep?.minutes || 0,
+        lightMinutes: mainSleep.levels?.summary?.light?.minutes || 0,
+        remMinutes: mainSleep.levels?.summary?.rem?.minutes || 0,
+        wakeMinutes: mainSleep.levels?.summary?.wake?.minutes || 0,
+        startTime: mainSleep.startTime,
+        endTime: mainSleep.endTime,
+        source: 'fitbit',
+        lastSync: new Date().toISOString()
+      };
+      await sleepClient.upsertEntity(sleepEntity, 'Merge');
+      console.log(`[Fitbit Sync] Saved sleep data for ${date}`);
+    }
+
+    // 3) Save heart rate summary to HeartRateLog table
+    if (hr['activities-heart'] && hr['activities-heart'].length > 0) {
+      const hrClient = TableClient.fromConnectionString(connectionString, 'HeartRateLog');
+      
+      // Create table if it doesn't exist
+      try {
+        await hrClient.createTable();
+      } catch (e) {
+        // Table already exists, ignore
+      }
+
+      const hrData = hr['activities-heart'][0];
+      const hrEntity = {
+        partitionKey: 'USER_shane-dev-001',
+        rowKey: date,
+        date,
+        restingHeartRate: hrData.value?.restingHeartRate || 0,
+        cardioMinutes: hrData.value?.heartRateZones?.find(z => z.name === 'Cardio')?.minutes || 0,
+        peakMinutes: hrData.value?.heartRateZones?.find(z => z.name === 'Peak')?.minutes || 0,
+        fatBurnMinutes: hrData.value?.heartRateZones?.find(z => z.name === 'Fat Burn')?.minutes || 0,
+        source: 'fitbit',
+        lastSync: new Date().toISOString()
+      };
+      await hrClient.upsertEntity(hrEntity, 'Merge');
+      console.log(`[Fitbit Sync] Saved heart rate data for ${date}`);
+    }
+
+    return {
+      success: true,
+      date,
+      steps: activity.summary.steps,
+      calories: activity.summary.caloriesOut,
+      sleepMinutes: sleep.sleep?.[0]?.minutesAsleep || 0,
+      restingHR: hr['activities-heart']?.[0]?.value?.restingHeartRate || 0
+    };
+  } catch (err) {
+    console.error(`[Fitbit Sync] Error syncing data for ${date}:`, err);
+    throw err;
+  }
+}
+module.exports = {
+  logMeal,
+  logWorkout,
+  getDailySummary,
+  estimateCaloriesBurned,
+  syncFitbitData
+};
