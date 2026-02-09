@@ -1,6 +1,6 @@
 // test-memory.js - Test the Memory Agent
 require('dotenv').config();
-const MemoryAgent = require('./agents/memoryAgent');
+const MemoryAgent = require('./Agents/Memoryagent');
 
 async function test() {
     console.log('🧪 Testing Advanced Memory Agent...\n');
