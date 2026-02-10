@@ -1,7 +1,6 @@
 {
-  "IsEncrypted": true,
+  "IsEncrypted": false,
   "Values": {
-    "FUNCTIONS_WORKER_RUNTIME": "CfDJ8C6RhgjKbzVCqM/UDNog1Wdl7BQgYu7hQ1vTexzJ3JYmlbcbxDr0dQaCjQaeiwu/DDss2rNNR43RKFndlNKbBN+FZmWtFb3Ub0wP/0XAZDngx6r3k2m2ifOW7535Fqa0xA=="
-  },
-  "ConnectionStrings": {}
+    "AzureWebJobsStorage": "DefaultEndpointsProtocol=https;AccountName=stlifevault;AccountKey=SPonmDCBkjKeg5vhpAsrSR6n8dAgk8X9cjA5IMQ+rxBaq9xSj8tC6kUvvQaeazwSl/EmVsEQ3jMD+ASt6tnAGg==;EndpointSuffix=core.windows.net"
+  }
 }

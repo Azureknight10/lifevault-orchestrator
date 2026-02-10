@@ -265,7 +265,7 @@ module.exports = {
   getDailySummary,
   estimateCaloriesBurned
 };
-const { getDailyActivity, getSleep, getHeartRateIntraday } = require('./fitbitAPI');
+const { getDailyActivity, getSleep, getHeartRateIntraday, getActivityLog } = require('./fitbitAPI');
 
 /**
  * Sync Fitbit data for a given date into Azure Tables
@@ -273,10 +273,11 @@ const { getDailyActivity, getSleep, getHeartRateIntraday } = require('./fitbitAP
 async function syncFitbitData(date) {
   try {
     // Fetch from Fitbit
-    const [activity, sleep, hr] = await Promise.all([
+    const [activity, sleep, hr,workouts] = await Promise.all([
       getDailyActivity(date),
       getSleep(date),
-      getHeartRateIntraday(date)
+      getHeartRateIntraday(date),
+      getActivityLog(date) 
     ]);
 
     // 1) Update DailyActivity with Fitbit data
@@ -363,19 +364,52 @@ async function syncFitbitData(date) {
       console.log(`[Fitbit Sync] Saved heart rate data for ${date}`);
     }
 
+    // 4) Save workouts to WorkoutLog table
+    if (workouts && workouts.activities && workouts.activities.length > 0) {
+      const workoutClient = TableClient.fromConnectionString(connectionString, 'WorkoutLog');
+      
+      // Create table if it doesn't exist
+      try {
+        await workoutClient.createTable();
+      } catch (e) {
+        // Table already exists, ignore
+      }
+
+      for (const workout of workouts.activities) {
+        const workoutEntity = {
+          partitionKey: 'USER_shane-dev-001',
+          rowKey: `${date}_${workout.logId}`,
+          date,
+          activityName: workout.activityName,
+          duration: workout.duration / 1000 / 60, // Convert ms to minutes
+          calories: workout.calories,
+          startTime: workout.startTime,
+          averageHeartRate: workout.averageHeartRate || 0,
+          steps: workout.steps || 0,
+          distance: workout.distance || 0,
+          source: 'fitbit',
+          lastSync: new Date().toISOString()
+        };
+        await workoutClient.upsertEntity(workoutEntity, 'Merge');
+      }
+      console.log(`[Fitbit Sync] Saved ${workouts.activities.length} workouts for ${date}`);
+    }
+
     return {
       success: true,
       date,
       steps: activity.summary.steps,
       calories: activity.summary.caloriesOut,
       sleepMinutes: sleep.sleep?.[0]?.minutesAsleep || 0,
-      restingHR: hr['activities-heart']?.[0]?.value?.restingHeartRate || 0
+      restingHR: hr['activities-heart']?.[0]?.value?.restingHeartRate || 0,
+      workoutCount: workouts?.activities?.length || 0
     };
   } catch (err) {
     console.error(`[Fitbit Sync] Error syncing data for ${date}:`, err);
     throw err;
   }
 }
+
 module.exports = {
   logMeal,
   logWorkout,
