@@ -58,64 +58,90 @@ class VitalityAgent {
     }
 
     async process(userQuery, context = {}) {
-        console.log('💪 Vitality Agent processing...');
+    console.log('💪 Vitality Agent processing...');
 
-        try {
-            const queryType = this.detectQueryType(userQuery);
-            console.log(`🎯 Query type: ${queryType}`);
+    try {
+        const safeQuery = (userQuery || '').toString();
+        // Strip orchestrator metadata from query
+        userQuery = safeQuery.replace(/^\[persona=[^\]]+\]\s*\[intent=[^\]]+\]\s*/, '');
+        const queryType = this.detectQueryType(userQuery);
+        console.log(`🎯 Query type: ${queryType}`);
 
-            const vitalityData = this.extractVitalityData(context);
-            console.log(`📦 Vitality records: ${vitalityData.length}`);
+        const vitalityData = this.extractVitalityData(context);
+        console.log(`📦 Vitality records: ${vitalityData.length}`);
 
-            let analysis;
-            if (queryType === 'meal_grading') {
-                analysis = await this.gradeMeal(userQuery, context);
-            } else if (queryType === 'workout_analysis') {
-                analysis = await this.analyzeWorkout(userQuery, vitalityData, context);
-            } else if (queryType === 'sleep_analysis') {
-                analysis = await this.analyzeSleep(userQuery, vitalityData, context);
-            } else if (queryType === 'energy_analysis') {
-                analysis = await this.analyzeEnergy(userQuery, vitalityData, context);
-            } else {
-                analysis = await this.generalVitalityAnalysis(userQuery, vitalityData, context);
-            }
+        let analysis;
 
-            return {
-                agent: 'vitality',
-                timestamp: new Date().toISOString(),
-                query_type: queryType,
-                vitality_data_points: vitalityData.length,
-                analysis: analysis,
-                success: true
-            };
-        } catch (error) {
-            console.error('❌ Vitality Agent error:', error.message);
-            return {
-                agent: 'vitality',
-                error: true,
-                message: error.message,
-                success: false
-            };
+        // NEW: Meal logging handlers (add these BEFORE meal_grading)
+        if (queryType === 'log_meal') {
+            analysis = await this.logMeal(userQuery, context);
+        } else if (queryType === 'scan_barcode') {
+            analysis = await this.scanBarcode(userQuery, context);
+        } else if (queryType === 'modify_last_meal') {
+            analysis = await this.modifyLastMeal(userQuery, context);
+        } else if (queryType === 'meal_grading') {
+            analysis = await this.gradeMeal(userQuery, context);
+        } else if (queryType === 'workout_analysis') {
+            analysis = await this.analyzeWorkout(userQuery, vitalityData, context);
+        } else if (queryType === 'sleep_analysis') {
+            analysis = await this.analyzeSleep(userQuery, vitalityData, context);
+        } else if (queryType === 'energy_analysis') {
+            analysis = await this.analyzeEnergy(userQuery, vitalityData, context);
+        } else {
+            analysis = await this.generalVitalityAnalysis(userQuery, vitalityData, context);
         }
+
+        return {
+            agent: 'vitality',
+            timestamp: new Date().toISOString(),
+            query_type: queryType,
+            vitality_data_points: vitalityData.length,
+            analysis: analysis,
+            success: true
+        };
+    } catch (error) {
+        console.error('❌ Vitality Agent error:', error.message);
+        return {
+            agent: 'vitality',
+            error: true,
+            message: error.message,
+            success: false
+        };
     }
+}
+
 
     detectQueryType(query) {
-        const q = query.toLowerCase();
-        
-        if (q.match(/meal|food|eat|grade|nutrition|diet|calorie|macro|protein/)) {
-            return 'meal_grading';
-        } else if (q.match(/workout|exercise|train|lift|gym|fitness|reps|sets/)) {
-            return 'workout_analysis';
-        } else if (q.match(/sleep|tired|rest|insomnia|dream|wake/)) {
-            return 'sleep_analysis';
-        } else if (q.match(/energy|fatigue|burnout|exhausted|drained/)) {
-            return 'energy_analysis';
-        } else if (q.match(/fast|fasting|eating window|intermittent/)) {
-            return 'fasting_analysis';
-        } else {
-            return 'general_vitality';
-        }
+     const q = (query || '').toLowerCase();
+    
+    // Meal logging intents (CHECK THESE FIRST - most specific)
+    if (/^log (breakfast|lunch|dinner|snack):/.test(q)) {
+        return 'log_meal';
+    } else if (/(scan barcode|barcode for)/.test(q)) {
+        return 'scan_barcode';
+    } else if (/(add .+ to (my )?last meal|modify last meal)/.test(q)) {
+        return 'modify_last_meal';
     }
+    // Meal grading - check before fasting to avoid "breakfast" matching "fast"
+    else if (/(meal|food|eat|grade|nutrition|diet|calorie|macro|protein)/.test(q)) {
+        return 'meal_grading';
+    }
+    // Other health intents
+    else if (/(workout|exercise|train|lift|gym|fitness|reps|sets)/.test(q)) {
+        return 'workout_analysis';
+    } else if (/(sleep|tired|rest|insomnia|dream|wake)/.test(q)) {
+        return 'sleep_analysis';
+    } else if (/(energy|fatigue|burnout|exhausted|drained)/.test(q)) {
+        return 'energy_analysis';
+    }
+    // Fasting - MOVED TO END so it doesn't match "breakfast"
+    else if (/\b(fasting|eating window|intermittent)\b/.test(q)) {
+        return 'fasting_analysis';
+    } else {
+        return 'general_vitality';
+    }
+}
+
 
     extractVitalityData(context) {
         const data = [];
@@ -179,7 +205,7 @@ Be specific and concise (200 words max).`;
     }
 
     fallbackMealGrade(mealDescription) {
-        const q = mealDescription.toLowerCase();
+        const q = (mealDescription || '').toLowerCase();
         
         let grade = 'C';
         let score = 3;
@@ -208,6 +234,143 @@ Be specific and concise (200 words max).`;
 - 1–2 simple upgrades (e.g., add protein, swap drink/side) to raise the grade.
 - Aim for whole foods, 30g+ protein, and minimal junk/added sugar.`;
     }
+async logMeal(userQuery, context) {
+    // Parse: "Log breakfast: 2 eggs, toast, coffee"
+    const mealPattern = /log (breakfast|lunch|dinner|snack):\s*(.+)/i;
+    const match = userQuery.match(mealPattern);
+    
+    if (!match) {
+        return "Format: 'Log [breakfast/lunch/dinner/snack]: [food items]'";
+    }
+    
+    const mealType = (match[1] || 'meal').toLowerCase();
+    const foodItems = (match[2] || '').trim();
+    if (!foodItems) {
+        return "Format: 'Log [breakfast/lunch/dinner/snack]: [food items]'";
+    }
+    
+    // Grade the meal first
+    const gradeAnalysis = await this.gradeMeal(foodItems, context);
+    
+    // Store in database via Azure Function
+    const mealLog = {
+    userId: context?.context?.userId || context?.userId || 'USER_DEFAULT',
+    timestamp: new Date().toISOString(),
+    mealType: mealType,
+    foodItems: foodItems,
+    gradeAnalysis: gradeAnalysis.substring(0, 2000), // truncate if too long
+    sessionId: context?.context?.sessionId || context?.sessionId || 'default-session'
+};
+
+console.log('📤 Sending meal to Azure:', JSON.stringify(mealLog, null, 2));
+
+    try {
+        // Call Azure Function to store meal
+        await axios.post(
+    `${process.env.MEAL_LOG_FUNCTION_URL}/logMeal`,
+    mealLog,
+    {
+                headers: { 'Content-Type': 'application/json' },
+                timeout: 10000
+            }
+        );
+        
+        return `✅ **${mealType.toUpperCase()} logged successfully!**\n\n${gradeAnalysis}\n\n*Logged at: ${new Date().toLocaleTimeString()}*`;
+        
+   } catch (error) {
+    console.error('⚠️ Meal logging error:', error.message);
+    console.error('Full error:', error.response?.data || error);
+    return `⚠️ Meal graded but not saved to database:\n\n${gradeAnalysis}`;
+}
+}
+
+async scanBarcode(userQuery, context) {
+    // Parse: "Scan barcode for protein bar" or just pass barcode number
+    const barcodePattern = /barcode[:\s]+(\d+)/i;
+    const match = userQuery.match(barcodePattern);
+    
+    if (!match) {
+        return `📱 **Barcode Scanning**\n\nTo scan a barcode:\n1. Use your phone camera to scan\n2. Send the barcode number: "Scan barcode: 012345678905"\n\nOr use the LifeVault mobile app's barcode scanner feature.`;
+    }
+    
+    const barcode = match[1];
+    
+    try {
+        // Query OpenFoodFacts API (free nutritional database)
+        const response = await axios.get(
+            `https://world.openfoodfacts.org/api/v0/product/${barcode}.json`,
+            { timeout: 10000 }
+        );
+        
+        if (response.data.status === 0) {
+            return `❌ Product not found for barcode: ${barcode}\n\nTry entering the food manually: "Log snack: [food name]"`;
+        }
+        
+        const product = response.data.product;
+        const foodDescription = `${product.product_name} (${product.brands || 'unknown brand'})`;
+        
+        // Auto-grade and log the scanned item
+        return await this.logMeal(`Log snack: ${foodDescription}`, context);
+        
+    } catch (error) {
+        console.error('⚠️ Barcode scan error:', error.message);
+        return `⚠️ Could not scan barcode. Please enter food manually: "Log snack: [food name]"`;
+    }
+}
+
+async modifyLastMeal(userQuery, context) {
+    // Parse: "Add banana to my last meal"
+    const addPattern = /add (.+?) to (my )?last meal/i;
+    const match = userQuery.match(addPattern);
+    
+    if (!match) {
+        return "Format: 'Add [food item] to my last meal'";
+    }
+    
+    const itemToAdd = match[1].trim();
+    
+    try {
+        // Get last meal from database via Azure Function
+        const response = await axios.get(
+            process.env.MEAL_LOG_FUNCTION_URL + '/GetLastMeal',
+            {
+                params: {
+                    userId: context.userId || 'default_user'
+                },
+                timeout: 10000
+            }
+        );
+        
+        const lastMeal = response.data;
+        
+        if (!lastMeal) {
+            return "❌ No recent meal found. Log a meal first: 'Log breakfast: [food items]'";
+        }
+        
+        // Update meal with new item
+        const updatedFoodItems = `${lastMeal.foodItems}, ${itemToAdd}`;
+        
+        // Re-grade updated meal
+        const newGrade = await this.gradeMeal(updatedFoodItems, context);
+        
+        // Update in database
+        await axios.patch(
+            process.env.MEAL_LOG_FUNCTION_URL + '/UpdateMeal',
+            {
+                mealId: lastMeal.id,
+                foodItems: updatedFoodItems,
+                gradeAnalysis: newGrade
+            },
+            { timeout: 10000 }
+        );
+        
+        return `✅ **Updated ${lastMeal.mealType}**\n\nAdded: ${itemToAdd}\n\n${newGrade}`;
+        
+    } catch (error) {
+        console.error('⚠️ Modify meal error:', error.message);
+        return `⚠️ Could not modify last meal. Error: ${error.message}`;
+    }
+}
 
     async analyzeWorkout(userQuery, vitalityData, context) {
         const workouts = vitalityData.filter(d => 

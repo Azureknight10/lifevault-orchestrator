@@ -1,3 +1,4 @@
+
 // orchestrator.js - Advanced multi-agent orchestration with Perplexity
 const path = require('path');
 const dotenvResult = require('dotenv').config({ path: path.join(__dirname, '.env') });
@@ -65,7 +66,7 @@ buildCapabilityMap() {
             // Expanded keywords with context awareness
             keywords: {
                 primary: ['workout', 'exercise', 'train', 'lift', 'run', 'yoga', 'fitness', 'gym', 'kinect', 'form'],
-                nutrition: ['nutrition', 'meal', 'food', 'eat', 'diet', 'calorie', 'macro', 'protein', 'carb', 'fat', 'hungry', 'grade my meal', 'what should i eat'],
+                nutrition: ['nutrition', 'meal', 'food', 'eat', 'diet', 'calorie', 'macro', 'protein', 'carb', 'fat', 'hungry', 'grade my meal', 'what should i eat', 'log meal', 'log breakfast', 'log lunch', 'log dinner', 'log snack'],
                 sleep: ['sleep', 'tired', 'exhausted', 'rest', 'recovery', 'insomnia', 'wake up', 'dream', 'nightmare', 'rem'],
                 energy: ['energy', 'fatigue', 'burnout', 'exhausted', 'drained', 'sluggish', 'lethargic'],
                 fasting: ['fast', 'fasting', 'intermittent', 'eating window', 'autophagy', 'ketosis'],
@@ -437,6 +438,45 @@ routingDecision.agents = routingDecision.agents.filter(name =>
      * Enhanced routing with multi-factor scoring
      */
     async intelligentRouting(userQuery) {
+        // DETERMINISTIC PRE-ROUTING: Hard rules before LLM
+        const cleanQuery = userQuery.toLowerCase().trim();
+
+        // Force VitalityAgent for meal logging (bypass LLM)
+        if (/\blog\s+(breakfast|lunch|dinner|snack|meal):/i.test(cleanQuery)) {
+            console.log('[DETERMINISTIC ROUTE] Meal logging detected → VitalityAgent');
+            return {
+                agents: ['vitality'],
+                agent_priority_scores: { vitality: 100 },
+                reasoning: {
+                    selection_rationale: 'Deterministic routing: meal logging pattern detected',
+                    collaboration_strategy: 'Direct to VitalityAgent',
+                    expected_value: 'Meal grading and storage',
+                    conflict_mitigation: 'N/A - single agent'
+                },
+                complexity: 2,
+                confidence: 1.0,
+                urgency: 'medium',
+                context: {
+                    query_characteristics: {
+                        type: 'single_domain',
+                        urgency: 'medium',
+                        temporal_focus: 'present',
+                        action_orientation: 'immediate_action'
+                    },
+                    collaboration_strategy: {
+                        primary_agent: 'vitality',
+                        supporting_agents: [],
+                        conflict_resolution_method: 'hierarchical'
+                    }
+                },
+                quality_indicators: {
+                    routing_quality: 'high_quality',
+                    validation_level: 'minimal',
+                    human_review_required: false
+                }
+            };
+        }
+
         const systemPrompt = `You are an expert query routing system for a personal AI with 8 specialized agents.
 
 AGENT CAPABILITIES:
@@ -662,7 +702,7 @@ REQUIRED OUTPUT FORMAT (JSON):
         const response = await this.callPerplexity([
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userQuery }
-        ], { temperature: 0.3, response_format: 'json' });
+        ], { temperature: 0.0, response_format: 'json' });
 
         return JSON.parse(response);
     }
