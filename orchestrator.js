@@ -302,7 +302,7 @@ buildCapabilityMap() {
     /**
      * Main entry point - enhanced with multi-step reasoning
      */
-    async processQuery(userQuery) {
+    async processQuery(userQuery, uiContext = {}) {
         const requestId = this.generateRequestId();
         const conversationId = this.generateConversationId();
         const userId = process.env.ORCHESTRATOR_USER_ID || 'default_user';
@@ -320,6 +320,9 @@ buildCapabilityMap() {
             console.log('[Orchestrator] Context loaded.');
         } catch (error) {
             console.error('[Orchestrator] Context load failed:', error.message);
+        }
+        if (uiContext && Object.keys(uiContext).length > 0) {
+            sharedContext = { ...sharedContext, uiContext };
         }
         const routingDecision = await this.intelligentRouting(userQuery);
         
@@ -983,7 +986,7 @@ async function runOrchestration(inputText, options = {}) {
     const combinedQuery = `[persona=${persona}] [intent=${intent}] ${inputText}`;
     
     // Call orchestrator
-    const response = await orchestrator.processQuery(combinedQuery, userId, uiContext);
+    const response = await orchestrator.processQuery(combinedQuery, uiContext);
     
     // Return formatted response for console.html
     return {

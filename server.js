@@ -13,6 +13,7 @@ console.log('FITBIT env check:', {
 });
 const http = require('http');
 const { runOrchestration } = require('./orchestrator');
+const { VitalityAgent } = require('./Agents/Vitalityagent');
 
 const PORT = process.env.PORT || 3000;
 
@@ -37,7 +38,7 @@ const server = http.createServer(async (req, res) => {
       response_type: 'code',
       client_id: process.env.FITBIT_CLIENT_ID,
       redirect_uri: process.env.FITBIT_REDIRECT_URI,
-      scope: 'activity heartrate sleep'
+      scope: 'activity heartrate sleep nutrition'
     });
 
     const authorizeUrl = `${process.env.FITBIT_AUTH_URL}?${params.toString()}`;
@@ -162,6 +163,49 @@ const server = http.createServer(async (req, res) => {
           'Access-Control-Allow-Origin': '*'
         });
         res.end(JSON.stringify(result));
+      } catch (err) {
+        console.error(err);
+        res.writeHead(500, {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        });
+        res.end(JSON.stringify({ error: err.message || 'Server error' }));
+      }
+    });
+    return;
+  }
+
+  // 4) Direct Vitality coach endpoint: POST /api/coach-lite
+  if (req.method === 'POST' && path === '/api/coach-lite') {
+    let body = '';
+    req.on('data', chunk => {
+      body += chunk.toString();
+    });
+
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const {
+          userId = 'shane-dev-001',
+          inputText = '',
+          uiContext = {}
+        } = payload;
+
+        const agent = new VitalityAgent();
+        const result = await agent.process(inputText, {
+          userId,
+          uiContext
+        });
+
+        res.writeHead(200, {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        });
+        res.end(JSON.stringify({
+          finalResponse: result.analysis || result.response || result,
+          agent: result.agent || 'vitality',
+          success: result.success !== false
+        }));
       } catch (err) {
         console.error(err);
         res.writeHead(500, {

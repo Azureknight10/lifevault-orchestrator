@@ -13,6 +13,80 @@ const workoutLogTable = TableClient.fromConnectionString(connectionString, 'Work
 const dailySummaryTable = TableClient.fromConnectionString(connectionString, 'DailySummary');
 const foodCacheTable = TableClient.fromConnectionString(connectionString, 'FoodCache');
 
+const {
+  getDailyActivity,
+  getSleep,
+  getHeartRateIntraday,
+  getActivityLog,
+  getReadiness,
+  getHrv,
+  getSpo2,
+  getSkinTemp,
+  getCardioFitness,
+  getSleepScore,
+  getHealthMetrics,
+  getFoodLog
+} = require('./fitbitAPI');
+
+const FITBIT_MEAL_TYPE = {
+  1: 'breakfast',
+  2: 'morning snack',
+  3: 'lunch',
+  4: 'afternoon snack',
+  5: 'dinner',
+  7: 'anytime'
+};
+
+function toNumberOrNull(value) {
+  if (value === null || value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+async function syncFitbitMeals(date) {
+  const log = await getFoodLog(date);
+  const foods = log?.foods || [];
+  let savedCount = 0;
+
+  for (const entry of foods) {
+    const loggedFood = entry.loggedFood || {};
+    const nutrients = entry.nutritionalValues || {};
+    const logTime = entry.logTime || '00:00:00';
+    const timestamp = `${date}T${logTime}`;
+    const mealId = entry.logId || uuid();
+
+    const entity = {
+      partitionKey: 'USER_DEFAULT',
+      rowKey: `${timestamp}_${mealId}`,
+      timestamp,
+      mealType: FITBIT_MEAL_TYPE[entry.mealTypeId] || 'meal',
+      mealName: loggedFood.name || 'Fitbit meal',
+      foodItems: JSON.stringify([
+        {
+          name: loggedFood.name,
+          amount: entry.amount,
+          unit: entry.unit?.name || entry.unit?.plural || null,
+          calories: loggedFood.calories ?? nutrients.calories ?? null
+        }
+      ]),
+      totalCalories: toNumberOrNull(nutrients.calories ?? loggedFood.calories),
+      totalProtein: toNumberOrNull(nutrients.protein),
+      totalCarbs: toNumberOrNull(nutrients.carbs),
+      totalFat: toNumberOrNull(nutrients.fat),
+      totalFiber: toNumberOrNull(nutrients.fiber),
+      totalSugar: toNumberOrNull(nutrients.sugar),
+      source: 'fitbit',
+      syncedToGraph: false
+    };
+
+    await mealLogTable.upsertEntity(entity, 'Merge');
+    savedCount += 1;
+  }
+
+  await updateDailySummary(date);
+  return { date, savedCount };
+}
+
 /**
  * Log a meal with nutrition data
  * @param {Object} mealData - { type, name, foodItems: [{source, id, servingSize}], notes }
@@ -259,26 +333,74 @@ async function getDailySummary(date = null) {
   }
 }
 
-module.exports = {
-  logMeal,
-  logWorkout,
-  getDailySummary,
-  estimateCaloriesBurned
-};
-const { getDailyActivity, getSleep, getHeartRateIntraday, getActivityLog } = require('./fitbitAPI');
+ 
 
 /**
  * Sync Fitbit data for a given date into Azure Tables
  */
 async function syncFitbitData(date) {
   try {
+    const safeFetch = async (label, fn) => {
+      try {
+        return await fn;
+      } catch (error) {
+        console.log(`[Fitbit Sync] ${label} unavailable: ${error.message}`);
+        return null;
+      }
+    };
+
     // Fetch from Fitbit
-    const [activity, sleep, hr,workouts] = await Promise.all([
+    const [activity, sleep, hr, workouts, readiness, hrv, spo2, skinTemp, cardio, sleepScore, healthMetrics] = await Promise.all([
       getDailyActivity(date),
       getSleep(date),
       getHeartRateIntraday(date),
-      getActivityLog(date) 
+      getActivityLog(date),
+      safeFetch('Readiness', getReadiness(date)),
+      safeFetch('HRV', getHrv(date)),
+      safeFetch('SpO2', getSpo2(date)),
+      safeFetch('SkinTemp', getSkinTemp(date)),
+      safeFetch('CardioFitness', getCardioFitness(date)),
+      safeFetch('SleepScore', getSleepScore(date)),
+      safeFetch('HealthMetrics', getHealthMetrics(date))
     ]);
+
+    const readinessScore =
+      readiness?.readiness?.[0]?.score?.value ??
+      readiness?.readiness?.[0]?.score ??
+      readiness?.score?.value ??
+      readiness?.score ??
+      null;
+
+    const hrvEntry = hrv?.hrv?.[0]?.value || hrv?.hrv?.[0] || null;
+    const hrvRmssd = hrvEntry?.dailyRmssd ?? hrvEntry?.rmssd ?? null;
+    const hrvSdnn = hrvEntry?.dailySdnn ?? hrvEntry?.sdnn ?? null;
+
+    const spo2Entry = spo2?.spo2?.[0]?.value || spo2?.spo2?.[0] || null;
+    const spo2Avg = spo2Entry?.avg ?? spo2Entry?.average ?? null;
+    const spo2Min = spo2Entry?.min ?? null;
+    const spo2Max = spo2Entry?.max ?? null;
+
+    const tempEntry = skinTemp?.tempSkin?.[0]?.value || skinTemp?.tempSkin?.[0] || null;
+    const skinTempRelative =
+      tempEntry?.nightlyRelative ?? tempEntry?.relative ?? null;
+    const skinTempAbsolute =
+      tempEntry?.nightlyAbsolute ?? tempEntry?.absolute ?? null;
+
+    const cardioEntry = cardio?.cardioScore?.[0]?.value || cardio?.cardioScore?.[0] || null;
+    const cardioFitness =
+      cardioEntry?.vo2Max ?? cardioEntry?.value ?? cardioEntry?.[0] ?? null;
+
+    const sleepScoreValue =
+      sleepScore?.sleepScore?.[0]?.score ??
+      sleepScore?.sleepScore?.[0]?.value ??
+      sleepScore?.sleepScore?.score ??
+      sleepScore?.score ??
+      null;
+
+    const metricsEntry = healthMetrics?.metrics || healthMetrics?.healthMetrics || null;
+    const metricsHrv = metricsEntry?.hrv?.[0]?.value || null;
+    const metricsSpo2 = metricsEntry?.o2?.[0]?.value || null;
+    const metricsTemp = metricsEntry?.temp?.[0]?.value || null;
 
     // 1) Update DailyActivity with Fitbit data
     const dailyClient = TableClient.fromConnectionString(connectionString, 'DailyActivity');
@@ -298,6 +420,7 @@ async function syncFitbitData(date) {
       caloriesBurned: activity.summary.caloriesOut,
       activeMinutes: activity.summary.fairlyActiveMinutes + activity.summary.veryActiveMinutes,
       distance: activity.summary.distances[0]?.distance || 0,
+      readinessScore,
       source: 'fitbit',
       lastSync: new Date().toISOString()
     };
@@ -357,11 +480,131 @@ async function syncFitbitData(date) {
         cardioMinutes: hrData.value?.heartRateZones?.find(z => z.name === 'Cardio')?.minutes || 0,
         peakMinutes: hrData.value?.heartRateZones?.find(z => z.name === 'Peak')?.minutes || 0,
         fatBurnMinutes: hrData.value?.heartRateZones?.find(z => z.name === 'Fat Burn')?.minutes || 0,
+        hrvRmssd,
+        hrvSdnn,
         source: 'fitbit',
         lastSync: new Date().toISOString()
       };
       await hrClient.upsertEntity(hrEntity, 'Merge');
       console.log(`[Fitbit Sync] Saved heart rate data for ${date}`);
+    }
+
+    if (readinessScore != null) {
+      const readinessClient = TableClient.fromConnectionString(connectionString, 'ReadinessLog');
+      try {
+        await readinessClient.createTable();
+      } catch (e) {
+        // Table already exists, ignore
+      }
+      const readinessEntity = {
+        partitionKey: 'USER_shane-dev-001',
+        rowKey: date,
+        date,
+        readinessScore,
+        source: 'fitbit',
+        lastSync: new Date().toISOString()
+      };
+      await readinessClient.upsertEntity(readinessEntity, 'Merge');
+      console.log(`[Fitbit Sync] Saved readiness data for ${date}`);
+    }
+
+    if (hrvRmssd != null || hrvSdnn != null || metricsHrv != null) {
+      const hrvClient = TableClient.fromConnectionString(connectionString, 'HrvLog');
+      try {
+        await hrvClient.createTable();
+      } catch (e) {
+        // Table already exists, ignore
+      }
+      const hrvEntity = {
+        partitionKey: 'USER_shane-dev-001',
+        rowKey: date,
+        date,
+        hrvRmssd: hrvRmssd ?? metricsHrv?.dailyRmssd ?? null,
+        hrvSdnn: hrvSdnn ?? metricsHrv?.dailySdnn ?? null,
+        source: 'fitbit',
+        lastSync: new Date().toISOString()
+      };
+      await hrvClient.upsertEntity(hrvEntity, 'Merge');
+      console.log(`[Fitbit Sync] Saved HRV data for ${date}`);
+    }
+
+    if (spo2Avg != null || metricsSpo2 != null) {
+      const spo2Client = TableClient.fromConnectionString(connectionString, 'Spo2Log');
+      try {
+        await spo2Client.createTable();
+      } catch (e) {
+        // Table already exists, ignore
+      }
+      const spo2Entity = {
+        partitionKey: 'USER_shane-dev-001',
+        rowKey: date,
+        date,
+        spo2Avg: spo2Avg ?? metricsSpo2?.avg ?? metricsSpo2?.average ?? null,
+        spo2Min: spo2Min ?? metricsSpo2?.min ?? null,
+        spo2Max: spo2Max ?? metricsSpo2?.max ?? null,
+        source: 'fitbit',
+        lastSync: new Date().toISOString()
+      };
+      await spo2Client.upsertEntity(spo2Entity, 'Merge');
+      console.log(`[Fitbit Sync] Saved SpO2 data for ${date}`);
+    }
+
+    if (skinTempRelative != null || skinTempAbsolute != null || metricsTemp != null) {
+      const tempClient = TableClient.fromConnectionString(connectionString, 'SkinTempLog');
+      try {
+        await tempClient.createTable();
+      } catch (e) {
+        // Table already exists, ignore
+      }
+      const tempEntity = {
+        partitionKey: 'USER_shane-dev-001',
+        rowKey: date,
+        date,
+        skinTempRelative: skinTempRelative ?? metricsTemp?.relative ?? null,
+        skinTempAbsolute: skinTempAbsolute ?? metricsTemp?.absolute ?? null,
+        source: 'fitbit',
+        lastSync: new Date().toISOString()
+      };
+      await tempClient.upsertEntity(tempEntity, 'Merge');
+      console.log(`[Fitbit Sync] Saved skin temperature data for ${date}`);
+    }
+
+    if (cardioFitness != null) {
+      const cardioClient = TableClient.fromConnectionString(connectionString, 'CardioFitnessLog');
+      try {
+        await cardioClient.createTable();
+      } catch (e) {
+        // Table already exists, ignore
+      }
+      const cardioEntity = {
+        partitionKey: 'USER_shane-dev-001',
+        rowKey: date,
+        date,
+        cardioFitness,
+        source: 'fitbit',
+        lastSync: new Date().toISOString()
+      };
+      await cardioClient.upsertEntity(cardioEntity, 'Merge');
+      console.log(`[Fitbit Sync] Saved cardio fitness data for ${date}`);
+    }
+
+    if (sleepScoreValue != null) {
+      const sleepScoreClient = TableClient.fromConnectionString(connectionString, 'SleepScoreLog');
+      try {
+        await sleepScoreClient.createTable();
+      } catch (e) {
+        // Table already exists, ignore
+      }
+      const sleepScoreEntity = {
+        partitionKey: 'USER_shane-dev-001',
+        rowKey: date,
+        date,
+        sleepScore: sleepScoreValue,
+        source: 'fitbit',
+        lastSync: new Date().toISOString()
+      };
+      await sleepScoreClient.upsertEntity(sleepScoreEntity, 'Merge');
+      console.log(`[Fitbit Sync] Saved sleep score data for ${date}`);
     }
 
     // 4) Save workouts to WorkoutLog table
@@ -415,5 +658,6 @@ module.exports = {
   logWorkout,
   getDailySummary,
   estimateCaloriesBurned,
-  syncFitbitData
+  syncFitbitData,
+  syncFitbitMeals
 };

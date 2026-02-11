@@ -723,3 +723,4 @@ if (require.main === module) {
 }
 
 module.exports.startVitalityAgent = startVitalityAgent;
+module.exports.VitalityAgent = VitalityAgent;

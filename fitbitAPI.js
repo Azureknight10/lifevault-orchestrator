@@ -66,9 +66,73 @@ async function getHeartRateIntraday(date) {
   return fitbitRequest(`/1/user/-/activities/heart/date/${date}/1d/1min.json`);
 }
 
+/**
+ * Get readiness score for a date (YYYY-MM-DD)
+ */
+async function getReadiness(date) {
+  return fitbitRequest(`/1/user/-/readiness/date/${date}.json`);
+}
+
+/**
+ * Get HRV summary for a date (YYYY-MM-DD)
+ */
+async function getHrv(date) {
+  return fitbitRequest(`/1/user/-/hrv/date/${date}.json`);
+}
+
+/**
+ * Get SpO2 for a date (YYYY-MM-DD)
+ */
+async function getSpo2(date) {
+  return fitbitRequest(`/1/user/-/spo2/date/${date}.json`);
+}
+
+/**
+ * Get skin temperature for a date (YYYY-MM-DD)
+ */
+async function getSkinTemp(date) {
+  return fitbitRequest(`/1/user/-/temp/skin/date/${date}.json`);
+}
+
+/**
+ * Get cardio fitness (VO2 max) for a date (YYYY-MM-DD)
+ */
+async function getCardioFitness(date) {
+  return fitbitRequest(`/1/user/-/cardioscore/date/${date}.json`);
+}
+
+/**
+ * Get sleep score for a date (YYYY-MM-DD)
+ */
+async function getSleepScore(date) {
+  return fitbitRequest(`/1/user/-/sleep/score/date/${date}.json`);
+}
+
+/**
+ * Get health metrics summary for a date (YYYY-MM-DD)
+ */
+async function getHealthMetrics(date) {
+  return fitbitRequest(`/1/user/-/health/metrics/date/${date}.json`);
+}
+
+/**
+ * Get food log for a date (YYYY-MM-DD)
+ */
+async function getFoodLog(date) {
+  return fitbitRequest(`/1/user/-/foods/log/date/${date}.json`);
+}
+
 module.exports = {
   getDailyActivity,
   getSleep,
   getHeartRateIntraday,
-  getActivityLog
+  getActivityLog,
+  getReadiness,
+  getHrv,
+  getSpo2,
+  getSkinTemp,
+  getCardioFitness,
+  getSleepScore,
+  getHealthMetrics,
+  getFoodLog
 };
