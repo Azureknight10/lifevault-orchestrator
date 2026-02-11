@@ -11,6 +11,14 @@
 		},
 		{
 			"type": "shell",
+			"label": "func: host start with CORS",
+			"command": "func host start --cors http://localhost:5500",
+			"problemMatcher": "$func-node-watch",
+			"isBackground": true,
+			"dependsOn": "npm install (functions)"
+		},
+		{
+			"type": "shell",
 			"label": "npm install (functions)",
 			"command": "npm install"
 		},
